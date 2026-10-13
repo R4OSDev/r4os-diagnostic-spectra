@@ -1,4 +1,4 @@
-﻿Spectra - Kernelwerkzeug 0.1.0
+﻿Spectra - Kernelwerkzeug 0.1.1
 =============================
 
 Aufrufe
@@ -127,3 +127,17 @@ Die Reclaim-Probe verwendet den normalen Cache-/Stackpfad; VM-Eviction bleibt
 auf den aufrufenden R4X-Besitzer begrenzt. MEMORY und STORAGE ersetzen keine
 Backing-Datei bei lebenden Reservierungen. Der Kernel behaelt deren genaue
 Dateiidentitaet bis zur Freigabe. Produktiver Speicherreclaim bleibt systemweit.
+
+Standardbenchmark 0.83.3
+-----------------------
+SPECTRA BENCH STANDARD liefert Scheduler/Synchronisation, Speicher, Kernel-IPC,
+Programmlebenszyklus und Datei/I/O getrennt sowie einen gleich gewichteten
+Gesamtindex. Je ein Warmlauf und fuenf feste Messungen. /AREA:<ID> waehlt einen
+Bereich, /BASELINE einen ausdruecklichen Eigenbezug; /REFERENCE:<Hostexport>
+und /COMPAREKEY:<Methodenhash> einen geprueften Vergleich. Ohne Referenz oder
+bei inkompatibler Methode bleiben Scores null mit Grund. STDCHILD.R4X ist die
+feste interne Lifecycle-Fixture desselben Pakets. Voller Verlustfrei-Export
+und lokales Scoring liegen unter Spectra/Tools/Export-StandardBenchmark.ps1.
+Der normale SMP4-Test fuehrt eine begrenzte Phase im bestehenden Runner aus;
+Quick/Build-only bleiben ohne Benchmark. Details und aktuelle Importfelder:
+Docs/Diagnostics/SpectraStandardBenchmark.txt.

@@ -19,11 +19,11 @@ pub const Request = struct {
     pub fn args(self: *const Request) [:0]const u8 { return self.args_bytes[0..self.args_len :0]; }
 };
 
-const Tokens = struct {
+pub const Tokens = struct {
     input: []const u8,
     at: usize = 0,
 
-    fn next(self: *Tokens) Error!?[]const u8 {
+    pub fn next(self: *Tokens) Error!?[]const u8 {
         while (self.at < self.input.len and std.ascii.isWhitespace(self.input[self.at])) self.at += 1;
         if (self.at == self.input.len) return null;
         const start = self.at;

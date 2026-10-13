@@ -237,7 +237,8 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     if (hasArg(ctx.sys.argsRaw(), lifecycle_thread_exit_arg)) ctx.sys.threadExit(89);
     if (hasArg(ctx.sys.argsRaw(), dynamic_thread_hold_arg)) return dynamicThreadHold(&ctx);
     ctx.sys.println("SPECTRA LIFECYCLE");
-    if (hasArg(ctx.sys.argsRaw(), "/WATCHCANCEL")) return testWatchCancellation(&ctx);
+    if (hasArg(ctx.sys.argsRaw(), "/WATCHCANCEL")) return testWatchCancellation(&ctx, false);
+    if (hasArg(ctx.sys.argsRaw(), "/STANDARDCANCEL")) return testWatchCancellation(&ctx, true);
 
     if (hasArg(ctx.sys.argsRaw(), gui_payload_hold_arg)) return guiPayloadHold(&ctx);
     if (hasArg(ctx.sys.argsRaw(), gui_raster_chain_hold_arg)) return guiRasterChainHold(&ctx);
@@ -4593,9 +4594,10 @@ fn programStorageFail(ctx: *DiagApi, msg: []const u8) bool {
     return false;
 }
 
-fn testWatchCancellation(ctx: *DiagApi) i32 {
+fn testWatchCancellation(ctx: *DiagApi, standard: bool) i32 {
     var child: r4os.abi.ProgramProcessHandle = .{};
-    if (ctx.sys.programSpawnHandle(route.path, "METRICS CLOCK /JSON /WATCH:60 /INTERVAL:1000", .console, &child) != r4os.abi.program_handle_ok)
+    const arguments = if (standard) "BENCH STANDARD /SETTLE:5000 /JSON" else "METRICS CLOCK /JSON /WATCH:60 /INTERVAL:1000";
+    if (ctx.sys.programSpawnHandle(route.path, arguments, .console, &child) != r4os.abi.program_handle_ok)
         return fail(ctx, "watch spawn failed");
     var completion: r4os.abi.ProgramProcessCompletion = .{};
     var reaped = false;
@@ -4608,6 +4610,14 @@ fn testWatchCancellation(ctx: *DiagApi) i32 {
     const start = ctx.sys.ticks();
     var output_seen = false;
     while (ctx.sys.ticks() -| start < timeout) {
+        if (standard) {
+            var info: r4os.abi.ProgramInstanceInfo = .{};
+            if (ctx.sys.programHandleStatus(&child, &info) == r4os.abi.program_handle_ok and info.state == @intFromEnum(r4os.abi.ProgramInstanceState.running)) {
+                ctx.sys.sleepTicks(ctx.sys.ticksFromMilliseconds(200));
+                output_seen = true;
+                break;
+            }
+        }
         var state: r4os.abi.ConsoleState = .{};
         if (ctx.sys.consoleState(child.instance_id, &state) >= 0 and state.stdout_bytes != 0) { output_seen = true; break; }
         ctx.sys.sleepTicks(1);
@@ -4627,7 +4637,7 @@ fn testWatchCancellation(ctx: *DiagApi) i32 {
         return fail(ctx, "cancelled watch handle remains visible");
     if (ownerResourceBlocks(ctx, child.instance_id) != 0)
         return fail(ctx, "cancelled watch retained resource blocks");
-    ctx.sys.println("SPECTRA LIFECYCLE watch cancel: OK exit=4 owner-blocks=0 handle=not-found");
+    ctx.sys.println(if (standard) "SPECTRA LIFECYCLE standard cancel: OK exit=4 owner-blocks=0 handle=not-found" else "SPECTRA LIFECYCLE watch cancel: OK exit=4 owner-blocks=0 handle=not-found");
     return 0;
 }
 

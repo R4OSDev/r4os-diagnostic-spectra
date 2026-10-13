@@ -1,0 +1,115 @@
+{
+  "_fixture": "Synthetic offline reference parser fixture; never a production import",
+  "schema_version": 1,
+  "run_id": "83030000-0000-4000-8000-000000000001",
+  "status": "completed",
+  "suite_version": "spectra-standard-1",
+  "scoring_version": "spectra-geomean-1",
+  "comparison_key": "fixture-method",
+  "instrumentation_mode": "base",
+  "environment": {
+    "vcpus": "4",
+    "warmup_runs": "1",
+    "repetitions": "5",
+    "cache_state": "warm-per-area-1",
+    "workloads": {
+      "scheduler_sync": "notification-roundtrip-128-v1",
+      "memory": "demand-vm-8x128k-v1",
+      "ipc": "kernel-dns-status-128-v1",
+      "lifecycle": "owned-fixture-4-v1",
+      "filesystem_io": "ntfs-stream-8x64k-v1"
+    }
+  },
+  "metrics": [
+    {
+      "area_id": "scheduler_sync",
+      "metric_id": "elapsed_ns_per_operation",
+      "metric_version": "1",
+      "unit": "ns/operation",
+      "direction": "lower_is_better",
+      "weight": "1",
+      "primary": true,
+      "status": "ok",
+      "failure_reason": null,
+      "sample_count": "5",
+      "median_value": "1000",
+      "checks": {
+        "work_complete": true,
+        "clock_valid": true,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "area_id": "memory",
+      "metric_id": "elapsed_ns_per_operation",
+      "metric_version": "1",
+      "unit": "ns/operation",
+      "direction": "lower_is_better",
+      "weight": "1",
+      "primary": true,
+      "status": "ok",
+      "failure_reason": null,
+      "sample_count": "5",
+      "median_value": "1000",
+      "checks": {
+        "work_complete": true,
+        "clock_valid": true,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "area_id": "ipc",
+      "metric_id": "elapsed_ns_per_operation",
+      "metric_version": "1",
+      "unit": "ns/operation",
+      "direction": "lower_is_better",
+      "weight": "1",
+      "primary": true,
+      "status": "ok",
+      "failure_reason": null,
+      "sample_count": "5",
+      "median_value": "1000",
+      "checks": {
+        "work_complete": true,
+        "clock_valid": true,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "area_id": "lifecycle",
+      "metric_id": "elapsed_ns_per_operation",
+      "metric_version": "1",
+      "unit": "ns/operation",
+      "direction": "lower_is_better",
+      "weight": "1",
+      "primary": true,
+      "status": "ok",
+      "failure_reason": null,
+      "sample_count": "5",
+      "median_value": "1000",
+      "checks": {
+        "work_complete": true,
+        "clock_valid": true,
+        "cleanup_confirmed": true
+      }
+    },
+    {
+      "area_id": "filesystem_io",
+      "metric_id": "elapsed_ns_per_operation",
+      "metric_version": "1",
+      "unit": "ns/operation",
+      "direction": "lower_is_better",
+      "weight": "1",
+      "primary": true,
+      "status": "ok",
+      "failure_reason": null,
+      "sample_count": "5",
+      "median_value": "1000",
+      "checks": {
+        "work_complete": true,
+        "clock_valid": true,
+        "cleanup_confirmed": true
+      }
+    }
+  ]
+}

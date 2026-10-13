@@ -21,17 +21,19 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     var result: i32 = 0;
     switch (request.command) {
         .help => output.message("help",
-            "SPECTRA 0.1.0 - kernel diagnostics\r\n" ++
+            "SPECTRA 0.1.1 - kernel diagnostics\r\n" ++
             "  METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE\r\n" ++
             "  LOGS BOOT|SERVICE\r\n" ++
             "  CHECK BOOT|PERFORMANCE|WORK|THREAD|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP [options]\r\n" ++
             "  BENCH CLOCK|BLIT|SERVICE-REGISTRY|KERNEL-IPC|DRIVER-WORK|PCI-INVENTORY|MEMORY-METADATA [options]\r\n" ++
             "  BENCH OBSERVER (console cost comparison)\r\n" ++
+            "  BENCH STANDARD [/AREA:scheduler_sync|memory|ipc|lifecycle|filesystem_io]\r\n" ++
+            "    [/BASELINE | /REFERENCE:path /COMPAREKEY:method] [/SETTLE:0..5000]\r\n" ++
             "  /JSON writes versioned NDJSON; /EXPORT:path explicitly writes a file.\r\n" ++
             "  METRICS/LOGS: /WATCH:1..60 /INTERVAL:100..60000 (waiting totals at most 60 s).\r\n" ++
             "  Exit: 0 success, 1 failed/incomplete, 2 arguments, 3 output, 4 cancelled.\r\n" ++
             "  Queries do not enable detail instrumentation or traces.", false),
-        .check, .bench => result = checks.run(app, &request, &output),
+        .check, .bench => result = if (request.command == .bench and cli.same(request.group(), "STANDARD")) @import("standard.zig").run(app, &request, &output) else checks.run(app, &request, &output),
         .metrics, .logs => {
             var i: u32 = 0;
             while (i < request.count) : (i += 1) {

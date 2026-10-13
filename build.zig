@@ -10,7 +10,11 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/unit_tests.zig"),
         .target = b.graph.host,
     }) });
-    b.step("test", "Spectra command, child routing and measurement contracts").dependOn(&b.addRunArtifact(host_tests).step);
+    const test_step = b.step("test", "Spectra command, child routing and measurement contracts");
+    test_step.dependOn(&b.addRunArtifact(host_tests).step);
+    const result_tests = b.addSystemCommand(&.{ "pwsh", "-NoLogo", "-NoProfile", "-File" });
+    result_tests.addFileArg(b.path("Tests/StandardBenchmark.Tests.ps1"));
+    test_step.dependOn(&result_tests.step);
     const sdk_build = b.lazyImport(@This(), "r4os_sdk") orelse return;
     const sdk_dep = b.dependencyFromBuildZig(sdk_build, .{});
     const libraries_build = b.lazyImport(@This(), "r4os_libraries") orelse return;
@@ -19,5 +23,6 @@ pub fn build(b: *std.Build) void {
     _ = sdk.addR4MFWithOptions(b.path("module.R4MF"), .{
         .zig_module_roots = &.{libraries_dep.namedLazyPath("r4std_zig_binding")},
     });
+    _ = sdk.addR4MFWithOptions(b.path("Fixtures/StandardChild/module.R4MF"), .{});
     @import("Fixtures/Loader/build.zig").add(b, sdk_build.build_api, sdk.builder, sdk_dep);
 }
