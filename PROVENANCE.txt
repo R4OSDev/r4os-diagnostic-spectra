@@ -1,0 +1,29 @@
+﻿Spectra source provenance
+=========================
+R4OS kernel diagnostics consolidated in roadmap 0.83.2.
+New command/collector/output implementation: R4OSDev, Apache-2.0.
+Original source commits and SHA-256 identities: Provenance/migration.json
+and Provenance/partial-migration.json. Notices of the source projects are
+retained below Provenance/. Loader fixtures and their own provenance live
+under Fixtures/Loader/. Source adaptation preserves the owners' assertions;
+child routes, module identity and output labels refer to SPECTRA.
+
+All fourteen loader fixture artifacts were compared byte-for-byte with the
+current original owner build. BASELINE.SHA256 now includes the previously
+unrecorded LSTRX preemption-import extension; the old pin is preserved in
+Provenance/LoaderDiag/BASELINE.original.SHA256.
+
+Migration corrections: storage reclaim is checked after its own explicit
+probe; /NVME preserves the hardware-specific acceptance. Memory cleanup uses
+exact parent/child ownership and the generation-bound completion exit code.
+This removes dependence on unrelated service allocations and a global last
+exit. A shared memory tag no longer selects another Spectra invocation.
+
+The existing real page-in probe additionally keeps an explicit YMM register
+live across each faulting load, detecting SIMD corruption from storage
+callbacks. The watch cancellation case expects the documented not-found
+result after consuming the completion; stale requires an ID replacement.
+
+Memory/storage reject live prior backing reservations before replacing their
+diagnostic files. R4DEV scopes diagnostic VM eviction to the caller; the
+normal production reclaim path continues to visit all owners.

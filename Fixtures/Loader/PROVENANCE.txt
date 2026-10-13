@@ -1,0 +1,24 @@
+﻿LoaderDiag fixture provenance
+=============================
+
+Fachliche Quelle: Commit 259cbfac272c47ac1a7828de973512d17b29ae10.
+
+Der Generator stammt aus den LOADERD-relevanten Teilen von Code/build.zig.
+Die Manifeste und Quellmarker stammen aus:
+
+- Tests/Fixture/R4LNegative
+- Tests/Fixture/R4M0Synthetic
+- Tests/Fixture/R4XImage
+
+In 0.64.18 wurden nur Besitzpfade und Markerkommentare auf das eigenstaendige
+LoaderDiag-Repository umgestellt. Payload, Imports, Exports, Relocations,
+Metadaten, Zielpfade und Image-Scope bleiben fachlich unveraendert.
+
+BASELINE.SHA256 enthaelt Groesse und SHA-256 der zuletzt aus dem eingefrorenen
+Altprojekt erzeugten 14 Referenzartefakte.
+
+0.81.19: LSTRX 0.1.3 ergaenzt ausschliesslich die explizite
+runtime.parallel=owned-v1-Deklaration und Modulversion im Raw-Generator
+und Manifest. Code/Payload und EXTMATH-Importvertrag bleiben gleich.
+Aktuelles Artefakt: 393882 Bytes, SHA256 db88b26f5e4a58395dac9e8f3f600a76b1a473a2d56388c29e305555f1aa3ebd.
+BASELINE.SHA256 bleibt der historische Altprojektvergleich.

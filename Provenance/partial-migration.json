@@ -1,0 +1,30 @@
+[
+  {
+    "project": "AppHeapDiag",
+    "source_commit": "46655737a16bebaad0454280c8dad2c5e105e139",
+    "source_sha256": "314fb1d0563a8a11dcd1480ebc6fea7a8a7b9300a1f36cdd924fc2b4f43c7333",
+    "destination": "src/checks/vm/main.zig",
+    "scope": "VM reserve/commit/fault/release; allocator checks remain"
+  },
+  {
+    "project": "NetIoDiag",
+    "source_commit": "a7b93071fa4acad9b4255719e1e3d367b44f5f7d",
+    "source_sha256": "ebee88d1d9df66294fe04e47dd629d4b79243696a91de0439b198aefd85e15d2",
+    "destination": "src/checks/tcp/main.zig",
+    "scope": "Kernel TCP counters; external TCPSVC/UDPSVC socket and completion contracts remain"
+  },
+  {
+    "project": "StorageDiag",
+    "source_commit": "712dafae5a046853c042fa4f5467d7d334237627",
+    "source_sha256": "05279ec3a8d9a05b2c0208f5da43e3aeec4022e0eaacd324df37a43b725d4c1d",
+    "destination": "src/checks/storage/main.zig",
+    "scope": "Kernel queues/reclaim/backing/pager; hardware inventory/file smoke remain"
+  },
+  {
+    "project": "SshService",
+    "source_commit": "011f6512b462e7f93fae8fc1521332ac95381362",
+    "source_sha256": "7eaef1343eb8b9b878b537d4d96cb83668441bce628230406133604f06414603",
+    "destination": "src/metrics.zig",
+    "scope": "Complete task owner/generation inventory replaces SSHD R4DIAG TASKS; SSHD retains transport PING."
+  }
+]

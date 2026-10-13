@@ -1,0 +1,14 @@
+# Test-only version-rejection R4L manifest.
+R4OS_MODULE_MANIFEST=2
+KIND=R4L
+NAME=VERBAD
+VERSION=0.1.0
+LANGUAGE=Zig
+SOURCE=fixture.zig
+TARGET=/R4OS/LIBS/VERBAD.R4L
+IMAGE_SCOPE=test
+IMPORT=LIB021:LibValue:2
+META=module.name=VERBAD
+META=feature=resolver-negative-version
+META=source.owner=Diagnostics/Spectra/Fixtures/Loader
+META=fixture.artifact-owner=Fixtures/Loader/build.zig

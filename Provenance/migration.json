@@ -1,0 +1,149 @@
+[
+  {
+    "repository": "R4OSDev/r4os-diagnostic-bootcorediag",
+    "workspace_project": "BootCoreDiag",
+    "source_commit": "3203565db1ae87479af632ba504a04d0462c0ee5",
+    "source_files_sha256": {
+      "src/main.zig": "039f0c67ffcda39a1c775bf4682aa426900177c79e534a4bb2b0d8e52b14fe5b"
+    },
+    "destination": "src/checks/boot"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-performancediag",
+    "workspace_project": "PerformanceDiag",
+    "source_commit": "a4038938d542f3542128f8685864a59220c0d9f0",
+    "source_files_sha256": {
+      "src/main.zig": "568d7478ec421bafff65f9e906b69f655f72119b6b15ead79c00d009d64077d0",
+      "src/measurement.zig": "b83cd78a91e3785123b6a5ed3e0b0808dc680cd117532b50e88b98df8f0ffaed",
+      "src/observer.zig": "41621161cb5145ecda373e6bb471f307caab341c4a48f2caa088b62d7c536ed4"
+    },
+    "destination": "src/checks/performance"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-driverdiag",
+    "workspace_project": "DriverDiag",
+    "source_commit": "dff0dafa8d4fe455cb9f30b48c61dde5c3dd46f1",
+    "source_files_sha256": {
+      "src/main.zig": "75144991a46f318bc226a7b131f02fc7b04cbad0864f8e980f388681ea4ab347"
+    },
+    "destination": "src/checks/work"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-threaddiag",
+    "workspace_project": "ThreadDiag",
+    "source_commit": "f408c3ae2e0c615ec0449d291a36c83c7fafefd2",
+    "source_files_sha256": {
+      "src/main.zig": "b0423cae5ecce97ccbe484e3524e48ba0cdf0163259fc913568d49fb72346870"
+    },
+    "destination": "src/checks/thread"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-stackdiag",
+    "workspace_project": "StackDiag",
+    "source_commit": "3e00cbd41de070d27f9f64ba7e17f886044e4015",
+    "source_files_sha256": {
+      "src/main.zig": "bcbf28125b054ad98b7d0aef8ad7b8cf96e43b99119ac52398f8dc45a1830a4f"
+    },
+    "destination": "src/checks/stack"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-simddiag",
+    "workspace_project": "SimdDiag",
+    "source_commit": "7cb3317c35c1e1849cc188b27a63da624cef929f",
+    "source_files_sha256": {
+      "src/main.zig": "7e82533d44a0e2fa345b7d08c67fa8babfdce85bc7ee0a2639821fe37ce4aa02"
+    },
+    "destination": "src/checks/simd"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-cleanupdiag",
+    "workspace_project": "CleanupDiag",
+    "source_commit": "13b2d7419089d03bc24cb81c0675f5c098b075c2",
+    "source_files_sha256": {
+      "src/main.zig": "d46f444085c1ba18e7cc47dc4fc7fe45acf850c4a3e00b9fc099b79330a832ab"
+    },
+    "destination": "src/checks/lifecycle"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-asynciodiag",
+    "workspace_project": "AsyncIoDiag",
+    "source_commit": "da055f77cea434d8e9d302cc27d73ef0ff2585a7",
+    "source_files_sha256": {
+      "src/main.zig": "2ba9aa55c05756a095e26e719221b2d104c5fd9bb856dd76ed5980d7d04040b7"
+    },
+    "destination": "src/checks/async_io"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-memorysuite",
+    "workspace_project": "MemorySuite",
+    "source_commit": "8aad38d0804759545a35fa27b1d19d167844cc3f",
+    "source_files_sha256": {
+      "src/main.zig": "b890ee3d0283ead98899ae60607e5d8354017b0aebd0ebccf836e9ba0fc2794a"
+    },
+    "destination": "src/checks/memory"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-fsdiag",
+    "workspace_project": "FsDiag",
+    "source_commit": "1d3b0aa2a40aa6444f5126dfd6970069491cbc8c",
+    "source_files_sha256": {
+      "src/fat_directory.zig": "f998fc0431f5d56af189c39f80ca54d0b088028ea03c668350ba4dd84d3941ef",
+      "src/main.zig": "c235be2935232d4ffc66ee13310ce05e24af484459dca6d0aad1e8df64114eb2"
+    },
+    "destination": "src/checks/filesystem"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-ntfsdiag",
+    "workspace_project": "NtfsDiag",
+    "source_commit": "d02b413256e8e864d7df31ab7470467655fc260a",
+    "source_files_sha256": {
+      "src/main.zig": "e39a9f0313bd0ebf76f09476ccb1335b8ef8459bf27443ecb12a8cae7a34ab24"
+    },
+    "destination": "src/checks/ntfs"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-loaderdiag",
+    "workspace_project": "LoaderDiag",
+    "source_commit": "36cf9afe140d28703ead8f931cc287110404c853",
+    "source_files_sha256": {
+      "src/main.zig": "d728e1921523761542f6a1d36c6d3136d50b6862441d0df90b293443983350dd"
+    },
+    "destination": "src/checks/loader"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-resourcediag",
+    "workspace_project": "ResourceDiag",
+    "source_commit": "595c4cc766cace8f72b3d683d3c2f663f18099e5",
+    "source_files_sha256": {
+      "src/main.zig": "5174136b418dcbf85a0c8b241ed93f8eecd0636ff0bc67f6840bdc0a7165afc0"
+    },
+    "destination": "src/checks/resources"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-inputdiag",
+    "workspace_project": "InputDiag",
+    "source_commit": "a4e61ac593aa68345ea9b43794d2aa6600a058c9",
+    "source_files_sha256": {
+      "src/main.zig": "86a82aabd1a9b1455cf4f861e697da17de251a0f02804654884f0fa3438290cf"
+    },
+    "destination": "src/checks/input"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-netdiag",
+    "workspace_project": "NetDiag",
+    "source_commit": "8d9d12599df12f43092c66616d3ac41606b50009",
+    "source_files_sha256": {
+      "src/main.zig": "4908d7ce4ec1b719b4e38a00a92c66ff621a91ff3382756a04dd48c3af6805c7"
+    },
+    "destination": "src/checks/network"
+  },
+  {
+    "repository": "R4OSDev/r4os-diagnostic-netsvcdiag",
+    "workspace_project": "NetSvcDiag",
+    "source_commit": "569105f35dede54f41d70053dd66726c3b37a6ac",
+    "source_files_sha256": {
+      "src/main.zig": "edf9536cc7b97e948ab8760b68cb616c0ff18ad9de391bc5c2c143f600d5e83b"
+    },
+    "destination": "src/checks/ipc"
+  }
+]

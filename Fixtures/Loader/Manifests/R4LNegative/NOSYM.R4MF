@@ -1,0 +1,14 @@
+# Missing-export negative fixture.
+R4OS_MODULE_MANIFEST=2
+KIND=R4L
+NAME=NOSYM
+VERSION=0.1.0
+LANGUAGE=Zig
+SOURCE=fixture.zig
+TARGET=/R4OS/LIBS/NOSYM.R4L
+IMAGE_SCOPE=test
+IMPORT=LIB021:NotThere:1
+META=module.name=NOSYM
+META=feature=runtime-r4l-missing-export-negative
+META=source.owner=Diagnostics/Spectra/Fixtures/Loader
+META=fixture.artifact-owner=Fixtures/Loader/build.zig

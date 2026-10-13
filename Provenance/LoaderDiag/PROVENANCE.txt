@@ -1,0 +1,15 @@
+LOADERD.R4X provenance
+======================
+
+Fachliche Quelle: Commit 259cbfac272c47ac1a7828de973512d17b29ae10,
+Pfad Code/System/Diagnostics/LoaderDiag.
+
+Source und Manifest wurden in 0.64.18 unveraendert uebernommen. Das
+Repository besitzt nun auch die 14 zuvor vom alten Root-Build erzeugten
+Laufzeit-Testfixtures. Ihr Generator, ihre alten Quellmarker und ihre
+Referenzhashes liegen unter Fixtures/; alle erzeugten Container sind
+byteidentisch zum eingefrorenen Altprojektstand.
+
+Das Buildscript wurde ausschliesslich um diese modulnahe Fixture-Erzeugung
+erweitert. Neu sind ausserdem Paketpin, Buildstarter, Settings, aktualisierte
+Repositorydokumentation und Git-Hygiene.

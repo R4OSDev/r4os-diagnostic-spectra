@@ -1,0 +1,11 @@
+R4OS_MODULE_MANIFEST=2
+KIND=R4D
+NAME=LSTRD
+VERSION=0.1.0
+LANGUAGE=Zig
+SOURCE=fixture.zig
+TARGET=/R4OS/DRIVERS/LSTRD.R4D
+IMAGE_SCOPE=test
+META=fixture=loader-stress
+META=source.owner=Diagnostics/Spectra/Fixtures/Loader
+META=fixture.artifact-owner=Fixtures/Loader/build.zig

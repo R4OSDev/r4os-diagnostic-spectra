@@ -1,0 +1,14 @@
+# Test-only missing-dependency R4L manifest.
+R4OS_MODULE_MANIFEST=2
+KIND=R4L
+NAME=MISS021
+VERSION=0.1.0
+LANGUAGE=Zig
+SOURCE=fixture.zig
+TARGET=/R4OS/LIBS/MISS021.R4L
+IMAGE_SCOPE=test
+IMPORT=NOPE021:Missing:1
+META=module.name=MISS021
+META=feature=resolver-negative-missing
+META=source.owner=Diagnostics/Spectra/Fixtures/Loader
+META=fixture.artifact-owner=Fixtures/Loader/build.zig

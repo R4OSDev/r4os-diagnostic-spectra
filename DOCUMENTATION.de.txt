@@ -1,0 +1,129 @@
+﻿Spectra - Kernelwerkzeug 0.1.0
+=============================
+
+Aufrufe
+-------
+METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE
+LOGS BOOT|SERVICE
+CHECK BOOT|PERFORMANCE|WORK|THREAD|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP
+BENCH CLOCK|BLIT|SERVICE-REGISTRY|KERNEL-IPC|DRIVER-WORK|PCI-INVENTORY|MEMORY-METADATA
+BENCH OBSERVER
+
+BOOT /CONFORMANCE setzt einen abgeschlossenen Shellstart voraus; nicht aus
+der noch laufenden Boot-AUTOEXEC aufrufen.
+
+CHECK uebernimmt die fachlichen Optionen der bisherigen Pruefung. Beispiele:
+  SPECTRA CHECK BOOT /CONFORMANCE
+  SPECTRA CHECK FILESYSTEM /PAGECACHE
+  SPECTRA CHECK THREAD /PROCESSEXIT
+  SPECTRA CHECK LIFECYCLE /PROGRAMLIFECYCLE
+PERFORMANCE prueft nur Konformitaet. Seine Benchmarks werden ausschliesslich
+mit BENCH gestartet; je Suite gelten weiterhin 3..20 Wiederholungen und die
+bisherigen begrenzten Last-/Aufraeumvertraege. OBSERVER misst auch reale
+Konsolenausgabe und akzeptiert deshalb keine umgeleitete Darstellung.
+Interne HOLD-/EXIT-Kindfixtures bleiben fuer Lebenszykluspruefungen erhalten;
+HOLD wartet ausdruecklich auf Close/Kill und ist kein normaler Kurztest.
+
+Ausgabe
+-------
+Ohne Optionen lesbarer Text ueber normales Console/STDIO. /JSON liefert
+NDJSON, ein Dokument pro Zeile. /EXPORT:path schreibt nur auf ausdruecklichen
+Aufruf; vorhandene Zieldatei wird ersetzt. Kein automatisches Dateilog,
+Sampler oder Historienservice. Fehler brechen einen begonnenen Export ab.
+Exitcodes: 0 erfolgreich, 1 Pruefung/Quelle unvollstaendig, 2 Parameter,
+3 Ausgabe, 4 Abbruch. Zeilen-/Konsolenpuffer sind begrenzt; grosse komplette
+Snapshots bevorzugt explizit exportieren.
+
+Neue Datensaetze: schema=r4os.spectra, schema_version=1; kind, group, index,
+snapshot, detail_enabled und data. Ganzzahlige Messfelder stehen als
+Dezimalstrings mit unit; deaktivierte Detailwerte als null mit Grund.
+TSC-Ticks sind keine Nanosekunden; event-ticks verwenden die gemeldete
+Eventfrequenz. ID-/Enum-/Bitmasken behalten ihre Contract-Feldnamen.
+Begin/End, Clockgeneration/-quelle/-flags/-aufloesung und Samplingmetadaten
+binden den Abruf. Es gibt keinen atomaren Snapshot ueber alle Besitzer.
+Tasklisten samt task_identity (Besitzer und Generation) werden vollstaendig
+mit stabiler Registry-Epoche erfasst; nach
+drei gescheiterten Versuchen wird keine Teilmenge als Erfolg ausgegeben.
+MemoryBlock-Eintraege sind einzelne aktuelle Besitzerabfragen; Anzahlwechsel
+werden als unvollstaendig gemeldet. Die Ausgabe bildet keine historische
+Systemzustandskopie ab.
+
+Die uebernommenen Fachbenchmarks behalten vorerst r4os.perfdiag.ndjson,
+Schema 7, mit module=SPECTRA und der Spectra-Modulversion. Dieser bestehende
+Rohdatenvertrag benoetigt einen Parser mit voller Integerpraezision; er
+ist vom neuen Standardbenchmark-Export getrennt. /JSON bewahrt diese
+Benchmarkdokumente und kapselt lesbare Pruefmeldungen als message-Datensaetze.
+Eine lange Meldung kann mit continued=true in mehrere Datensaetze zerfallen.
+
+METRICS/LOGS: /WATCH:N (1..60), /INTERVAL:MS (100..60000). Die angeforderten
+Warteintervalle sind zusammen auf 60 Sekunden begrenzt; Snapshotarbeit
+kommt hinzu. Jeder Abruf endet erkennbar, Close wird zwischen Abrufen und
+in kurzen Warteschritten geprueft. Keine automatische Trace-Aktivierung.
+
+Quellen und Aufwand
+------------------
+Normaler Kernel: -Dmetrics=false. Detailkernel: -Dmetrics=true, Neustart
+noetig. Betriebs-/Fehlerzaehler bleiben in beiden Modi. Nullfelder bei
+deaktivierter Detailinstrumentierung sind keine gemessenen Nullzeiten.
+Die Metadatentabelle nennt Sampling und Gruppenanzahl. IRQ 0..31 und der
+Work-v2-Vertrag mit Aggregat 0 sowie Ownern 1..16 werden vollstaendig gelesen.
+METRICS SUMMARY/ALL liest auch die breite, teurere Summary. Gezielt abgefragte
+Gruppen vermeiden sie, soweit ein eigener Zaehler-/Listenvertrag existiert.
+Ausgabe und expliziter Export kosten zusaetzliche Laufzeit; die Daten sind
+keine observerfreien Messungen. Eigenkostenbelege stehen im Workspace unter
+Docs/Diagnostics/KernelInstrumentation.txt und KernelInstrumentation0831.json.
+
+LOGS BOOT liest den vorhandenen 64-KB-Kernelring stabil und zeigt Kapazitaet,
+Laenge, total_written und dropped_bytes. Bei alten Textzeilen sind originale
+Ereigniszeit und Schweregrad unbekannt. LOGS SERVICE liest ausschliesslich
+die Kernel-Bootlogquelle von LOGSVC, mit Sequenz, Revision, Verlust- und
+Trunkierungsflags. Deren Tickzeit bezeichnet die Sammlung, nicht den alten
+Kernelereigniszeitpunkt; die Schwere ist die Klassifizierung von LOGSVC.
+Waehrend einer veraenderten Paginierung werden Teilseiten verworfen.
+Explizite Stack-Traces kommen seit Kernel 0.1.265 auch in den begrenzten
+Bootlog; normale Programmstarts formatieren deshalb keine zusaetzlichen Texte.
+
+Besitzgrenze
+------------
+Nur Kernelmessungen/-pruefungen wandern hierher. APPHEAPD behaelt seine
+SDK-Allocatorpruefungen, STORDIAG Hardwareinventar und Hardware-Dateiprobe,
+NETIOD die externen TCP-/UDP-Dienstvertraege. DISPLAYD/AUDIOD behalten
+Treiber-/Servicearbeitslasten samt kontextbezogenen Kontrollzaehlern.
+LOGCENTER besitzt die anderen Logquellen, auch in All und Export.
+SYSINFO bleibt die allgemeine Systemidentitaets-/Hardwareuebersicht.
+SSHD behaelt R4DIAG PING als reine Transportantwort; R4DIAG TASKS entfaellt.
+Die GUI, weitere Fachbereiche, Gesamtrefactor und das externe Datenbanktool
+werden hier nicht implementiert. Benchmarks.jsonl wird nicht benutzt.
+
+CHECK STORAGE prueft generische Kernelqueues, Cache, Reclaim und Pagerpfade.
+Der Reclaim-Nachweis verwendet den Snapshot nach der eigenen Probe; ein
+vorheriger Benchmark ist nicht erforderlich. /NVME fordert zusaetzlich einen
+vorhandenen NVMe-Controller mit abgeschlossener Workerarbeit und ohne Timeout.
+Ohne /NVME wird fehlende NVMe-Hardware ausdruecklich als nicht vorhanden
+ausgegeben; vorhandene NVMe-Geraete muessen denselben Vertrag erfuellen.
+
+Die Konsolenausgabe gibt nach jeweils hoechstens 4 KB dem Terminal-/SSH-Leser
+20 ms Zeit. Dies ist Darstellungsaufwand ausserhalb der Messschleifen; ein
+ausdruecklicher Dateiexport wird dadurch nicht gebremst. Die bestehende
+Konsole haelt nur einen begrenzten Textrest. Verliert SSH ungelesene Bytes,
+endet die Sitzung mit Status 3 und einer Verlustmeldung statt Erfolg. Fuer
+langsame Verbindungen oder grosse Gesamtabfragen /EXPORT verwenden und die
+Datei per SFTP lesen. Bereits gelesenen Text aus dem Puffer zu entfernen ist
+kein Datenverlust.
+
+CHECK LIFECYCLE /WATCHCANCEL prueft nach dem ersten Messsnapshot eine
+Close-Anforderung, Exitcode 4, Reap, ungueltigen alten Handle und fehlende
+Ressourcen des genauen Kindbesitzers. Die Memory-Cleanup-Pruefung bilanziert
+eigenen Besitzer und jeden beendeten Kindbesitzer getrennt; nebenlaeufige
+Dienststacks sind kein Leak des getesteten Programms. Den Exitcode liefert
+die generationengepruefte Completion statt eines globalen letzten Exits.
+
+Der Memory-Check prueft beim echten Page-in ausserdem einen ueber der
+Fault-Instruktion lebenden YMM-Registerinhalt. Der Kernel muss seinen
+wartenden Page-in-Stack je Task und den unterbrochenen SIMD-Zustand behalten;
+der pro CPU geteilte Exception-IST darf keinen solchen Wait ueberspannen.
+
+Die Reclaim-Probe verwendet den normalen Cache-/Stackpfad; VM-Eviction bleibt
+auf den aufrufenden R4X-Besitzer begrenzt. MEMORY und STORAGE ersetzen keine
+Backing-Datei bei lebenden Reservierungen. Der Kernel behaelt deren genaue
+Dateiidentitaet bis zur Freigabe. Produktiver Speicherreclaim bleibt systemweit.
