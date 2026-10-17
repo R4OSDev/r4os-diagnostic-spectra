@@ -1,15 +1,17 @@
 param(
     [Parameter(Mandatory)][string]$EvidenceRoot,
     [Parameter(Mandatory)][ValidateRange(1,65535)][int]$QmpPort,
-    [switch]$ResyncOnly
+    [switch]$ResyncOnly,
+    [switch]$OverlapOnly
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+if($ResyncOnly -and $OverlapOnly){throw 'Select one explicit input case mode'}
 $EvidenceRoot=[IO.Path]::GetFullPath($EvidenceRoot)
 $serial=Join-Path $EvidenceRoot 'serial.log'
 $proofPath=Join-Path $EvidenceRoot 'host-proof.json'
 if(Test-Path -LiteralPath $proofPath){throw 'Never overwrite input evidence'}
-$proof=[ordered]@{schema=1;result='failed';event_count=0;holds=@();fill_presses=140;all_keys_released=$false;resync_only=$ResyncOnly.IsPresent}
+$proof=[ordered]@{schema=1;result='failed';event_count=0;holds=@();overlaps=@();duplicate_make_requests=0;fill_presses=$(if($OverlapOnly){0}else{140});all_keys_released=$false;resync_only=$ResyncOnly.IsPresent;overlap_only=$OverlapOnly.IsPresent}
 $qmpClient=$null;$reader=$null;$writer=$null;$identity=0
 $downKeys=[Collections.Generic.HashSet[string]]::new()
 function Read-Serial {
@@ -52,7 +54,7 @@ function Press-Key([string]$Code,[int]$Delay=20){
     Send-Key $Code $false
 }
 try{
-    Wait-Marker $(if($ResyncOnly){'SPECTRA INPUT modifiers RESET_FILL READY'}else{'SPECTRA INPUT modifiers CTRL READY'}) 120000
+    Wait-Marker $(if($OverlapOnly){'SPECTRA INPUT modifiers SHIFT_LR READY'}elseif($ResyncOnly){'SPECTRA INPUT modifiers RESET_FILL READY'}else{'SPECTRA INPUT modifiers CTRL READY'}) 120000
     $qmpClient=[Net.Sockets.TcpClient]::new()
     $qmpClient.NoDelay=$true;$qmpClient.ReceiveTimeout=5000;$qmpClient.SendTimeout=5000
     $qmpClient.Connect('127.0.0.1',$QmpPort)
@@ -63,6 +65,26 @@ try{
     $greeting=$reader.ReadLine()|ConvertFrom-Json -AsHashtable
     if(!$greeting.ContainsKey('QMP')){throw 'Missing QMP greeting'}
     Invoke-Qmp 'qmp_capabilities'
+    if($OverlapOnly){
+        foreach($phase in @(
+            @{label='SHIFT_LR';first='shift';second='shift_r'},
+            @{label='SHIFT_RL';first='shift_r';second='shift'},
+            @{label='CTRL_LR';first='ctrl';second='ctrl_r'},
+            @{label='CTRL_RL';first='ctrl_r';second='ctrl'}
+        )){
+            Wait-Marker ('SPECTRA INPUT modifiers '+$phase.label+' READY')
+            Send-Key $phase.first $true
+            Send-Key $phase.second $true
+            Send-Key $phase.second $true
+            $proof.duplicate_make_requests++
+            Send-Key $phase.first $false
+            Press-Key 'a'
+            Send-Key $phase.second $false
+            Press-Key 'a'
+            Wait-Marker ('SPECTRA INPUT modifiers '+$phase.label+': ok')
+            $proof.overlaps+=@{label=$phase.label;remaining_side_then_full_release=$true}
+        }
+    }else{
     if(!$ResyncOnly){foreach($phase in @(
         @{label='CTRL';modifier='ctrl';first='a';second='d';ordinary='a'},
         @{label='ALT';modifier='alt';first='tab';second='tab';ordinary='tab'},
@@ -94,15 +116,24 @@ try{
     Wait-Marker 'SPECTRA INPUT modifiers RESET_ACK READY'
     Send-Key 'ctrl' $false
     Press-Key 'ret'
+    }
     Wait-Marker 'SPECTRA INPUT modifiers result: OK'
-    $expectedEvents=if($ResyncOnly){288}else{312}
+    if($OverlapOnly){
+        $text=Read-Serial
+        foreach($row in $proof.overlaps){
+            $match=[regex]::Match($text,('SPECTRA INPUT modifiers '+[regex]::Escape($row.label)+' modifier-repeats=(\d+)'))
+            if(!$match.Success){throw 'Missing guest repeat observation'}
+            $row.guest_modifier_repeats=[int]$match.Groups[1].Value
+        }
+    }
+    $expectedEvents=if($OverlapOnly){36}elseif($ResyncOnly){288}else{312}
     if($downKeys.Count -ne 0 -or $proof.event_count -ne $expectedEvents){throw 'Incomplete bounded input sequence'}
     $proof.all_keys_released=$true;$proof.result='pass'
 }catch{
     $proof.error=$_.Exception.Message
 }finally{
     if($proof.result -cne 'pass' -and $null -ne $writer){
-        foreach($key in @('ctrl','alt','alt_r','a','d','q','tab','ret')){
+        foreach($key in @('ctrl','ctrl_r','shift','shift_r','alt','alt_r','a','d','q','tab','ret')){
             try{Send-Key $key $false}catch{break}
         }
     }

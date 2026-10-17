@@ -22,11 +22,16 @@ pub fn r4_app_main(r4_app: *r4os.App) i32 {
     var args = std.mem.tokenizeAny(u8, r4_app.args(), " \t");
     var modifiers = false;
     var resync_only = false;
+    var overlap_only = false;
     while (args.next()) |arg| {
         if (@import("../../cli.zig").same(arg, "/MODIFIERS")) modifiers = true;
         if (@import("../../cli.zig").same(arg, "/RESYNC")) resync_only = true;
+        if (@import("../../cli.zig").same(arg, "/OVERLAP")) overlap_only = true;
     }
-    if (modifiers) return @import("modifiers.zig").run(&ctx.sys, &ctx.desk, resync_only);
+    if (modifiers) {
+        if (resync_only and overlap_only) return 2;
+        return @import("modifiers.zig").run(&ctx.sys, &ctx.desk, if (overlap_only) .overlap else if (resync_only) .resync else .modifiers);
+    }
     var mouse: r4os.abi.Mouse = undefined;
     ctx.desk.mouseState(&mouse);
 
