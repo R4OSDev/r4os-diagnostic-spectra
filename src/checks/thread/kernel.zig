@@ -41,39 +41,15 @@ fn passed(r: Report) bool {
     return true;
 }
 
-var shared_dev: r4os.r4dev.Context = undefined;
-var peer_report: Report = .{};
-var peer_started: u8 = 0;
-var peer_valid: bool = false;
-fn peer(_: u64) callconv(.c) i32 {
-    @atomicStore(u8, &peer_started, 1, .release);
-    peer_valid = invoke(&shared_dev, abi.kernel_scheduler_check_case_sync, &peer_report);
-    return 0;
+fn admissionInvoke(dev: *const r4os.r4dev.Context, result: *Report) bool {
+    return invoke(dev, abi.kernel_scheduler_check_case_sync, result);
 }
-fn admission(app: *r4os.App, dev: *const r4os.r4dev.Context, out: *Output) i32 {
-    shared_dev = dev.*; peer_report = .{}; peer_valid = false; @atomicStore(u8, &peer_started, 0, .release);
-    var worker = switch (app.resources().createThread(peer, 0, 0)) {
-        .handle => |value| value,
-        .failure => { out.message("thread", "SPECTRA THREAD kernel admission: worker unavailable", false); return 1; },
-    };
-    var sys = app.system();
-    for (0..2000) |_| {
-        if (@atomicLoad(u8, &peer_started, .acquire) != 0) break;
-        sys.sleepTicks(1);
-    }
-    var own: Report = .{};
-    const valid = invoke(dev, abi.kernel_scheduler_check_case_sync, &own);
-    const joined = switch (worker.join(r4os.time_contract.timeoutFinite(.{ .nanoseconds = 50_000_000_000 }))) { .exited => |code| code == 0, else => false };
-    if (!joined) { out.message("thread", "SPECTRA THREAD kernel admission: join FAILED", false); return 1; }
-    out.record("kernel_scheduler", "thread", 0, own);
-    out.record("kernel_scheduler", "thread", 1, peer_report);
-    const busy = if (own.status == abi.kernel_scheduler_check_status_busy) own else peer_report;
-    const completed = if (own.status == abi.kernel_scheduler_check_status_busy) peer_report else own;
-    const ok = valid and peer_valid and passed(completed) and busy.status == abi.kernel_scheduler_check_status_busy and
-        busy.run_id == 0 and busy.passed == 0 and busy.failed == 0 and busy.tasks_created == 0 and busy.live_tasks == 0 and busy.live_work == 0;
-    out.message("thread", if (ok) "SPECTRA THREAD kernel admission: ok (one owner, one busy, actual join)" else "SPECTRA THREAD kernel admission: FAILED", false);
-    return if (ok) 0 else 1;
+fn admissionBusy(result: Report) bool {
+    return result.status == abi.kernel_scheduler_check_status_busy and result.run_id == 0 and
+        result.passed == 0 and result.failed == 0 and result.tasks_created == 0 and
+        result.live_tasks == 0 and result.live_work == 0;
 }
+const Admission = @import("../admission.zig").Probe(Report, admissionInvoke, passed, admissionBusy);
 
 pub fn run(app: *r4os.App, args: []const u8, out: *Output) i32 {
     const all = abi.kernel_scheduler_check_case_all;
@@ -85,7 +61,7 @@ pub fn run(app: *r4os.App, args: []const u8, out: *Output) i32 {
     const dev = app.devicesLowLevel() orelse { out.unavailable("thread", "R4DEV missing"); return 2; };
     if (!dev.hasFn("scheduler_kernel_check")) { out.unavailable("thread", "native scheduler check missing"); return 2; }
     if (!headerContract(&dev)) { out.message("thread", "SPECTRA THREAD kernel: header contract FAILED", false); return 1; }
-    if (cli.same(args, "/KERNEL:ADMISSION")) return admission(app, &dev, out);
+    if (cli.same(args, "/KERNEL:ADMISSION")) return Admission.run(app, &dev, out, "kernel_scheduler", "thread", "SPECTRA THREAD kernel admission: ok (one owner, one busy, actual join)");
     var result: Report = .{};
     const valid = invoke(&dev, selected, &result);
     out.record("kernel_scheduler", "thread", 0, result);

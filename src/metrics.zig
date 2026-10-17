@@ -66,6 +66,7 @@ pub fn run(app: *r4os.App, group: []const u8, out: *Output) i32 {
         known = true;
         ok = optional(out, "kernel_version", 0, dev.kernelVersion()) and ok;
     }
+    if (selected(group, "SMP")) { known = true; ok = @import("smp.zig").collect(&dev, out) and ok; }
     if (selected(group, "SUMMARY")) { known = true; ok = optional(out, "summary", 0, dev.performanceSummary()) and ok; }
     if (selected(group, "LOCKS") or selected(group, "STACKS")) {
         known = true;

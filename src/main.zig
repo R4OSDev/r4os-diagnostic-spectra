@@ -22,9 +22,10 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     switch (request.command) {
         .help => output.message("help",
             "SPECTRA " ++ @import("spectra_version").value ++ " - kernel diagnostics\r\n" ++
-            "  METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE\r\n" ++
+            "  METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|SMP|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE\r\n" ++
             "  LOGS BOOT|SERVICE\r\n" ++
-            "  CHECK BOOT|PERFORMANCE|WORK|THREAD|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP [options]\r\n" ++
+            "  CHECK BOOT|PERFORMANCE|WORK|THREAD|SMP|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP [options]\r\n" ++
+            "  CHECK SMP [/ADMISSION] (functional CPU/clock/remote-TLB checks)\r\n" ++
             "  CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION] (bounded native checks)\r\n" ++
             "  CHECK MEMORY /KERNELHEAP (bounded kernel allocator cases and own cleanup)\r\n" ++
             "  BENCH CLOCK|BLIT|SERVICE-REGISTRY|KERNEL-IPC|DRIVER-WORK|PCI-INVENTORY|MEMORY-METADATA [options]\r\n" ++

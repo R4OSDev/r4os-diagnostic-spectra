@@ -72,3 +72,11 @@ work-release receipts prove cleanup. ADMISSION checks two concurrent own
 callers and a real join. Global timer/reserve injections remain isolated boot
 cases; the structured result advertises them and unavailable hardware.
 Use the same `/JSON` and explicit `/EXPORT:` presentation as other checks.
+
+Since 0.1.13, `CHECK SMP [/ADMISSION]` runs owned native CPU-placement,
+checksum, monotonic-clock, mapping/TLB-ACK and heap/mutex phases. Every worker
+and backing resource needs its own retirement receipt. Fewer than two
+schedulable CPUs report unavailable without starting work. Global timeout
+injection and other boot-only acceptance cases remain isolated. `METRICS SMP`
+only reads current CPU/clock registrations and actual TLB counters; a passive
+snapshot never claims a historical check pass or supplies a benchmark score.
