@@ -1658,6 +1658,7 @@ const App = struct {
         if (!self.testRealloc()) return false;
         if (!self.testFragmentation()) return false;
         if (!self.testLargeContiguous()) return false;
+        if (!@import("sdk_heap.zig").run(&self.ctx.sys)) return self.failBool("parallel SDK heap");
 
         const after_free = self.ctx.sys.allocatorStats();
         if (after_free.active_bytes != before.active_bytes or after_free.active_allocations != before.active_allocations) {
