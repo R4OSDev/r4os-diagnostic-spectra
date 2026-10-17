@@ -71,7 +71,10 @@ pub fn run(app: *r4os.App, group: []const u8, out: *Output) i32 {
         known = true;
         if (dev.performanceInstrumentation()) |info| {
             if (selected(group, "LOCKS")) for (0..info.lock_count) |i| { ok = optional(out, "locks", @intCast(i), dev.performanceLock(@intCast(i))) and ok; };
-            if (selected(group, "STACKS")) for (0..info.stack_group_count) |i| { ok = optional(out, "stacks", @intCast(i), dev.performanceStack(@intCast(i))) and ok; };
+            if (selected(group, "STACKS")) {
+                for (0..info.stack_group_count) |i| { ok = optional(out, "stacks", @intCast(i), dev.performanceStack(@intCast(i))) and ok; }
+                ok = @import("stack_fault.zig").collect(&dev, out) and ok;
+            }
         } else { out.unavailable("instrumentation", "mode/list metadata unavailable"); ok = false; }
     }
     if (selected(group, "TASKS")) { known = true; ok = tasks(app, &dev, out) and ok; }

@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "run_id": "6133385b-2b6c-496a-9950-9835a0752f8b",
+  "suite_version": "spectra-standard-1",
+  "scoring_version": "spectra-geomean-1",
+  "original_export_sha256": "fa8e96c18257c2d121e2d6f58b450296e9155747e3c52eeea36979582d467515",
+  "scoring_sha256": "5390c5798da9c3ca028f3aa2baadca3fd66e20e4fdcaec905314b44eb5d92133"
+}

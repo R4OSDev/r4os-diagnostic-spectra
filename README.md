@@ -22,14 +22,30 @@ An independent checkout can also use `zig build` with the R4OS Zig toolchain; `b
 
 The module consolidates former R4OS kernel diagnostics. Source identities and required notices are retained in `Provenance/`; loader fixtures live in `Fixtures/Loader/`. See `DOCUMENTATION.de.txt` for data formats, limits and the migration boundary.
 
-The five-area standard suite is `SPECTRA BENCH STANDARD`; `/AREA:memory` selects
-a component and `/BASELINE` explicitly defines a self-reference. Fixed work,
-one warmup and five samples, five equally weighted scores plus overall, and
-all raw samples are retained. `Tools/Export-StandardBenchmark.ps1` validates
-the guest records and supplies the standalone Schema-1 host export/reference
-comparison. The frozen reference is `Baselines/standard-1.json`. The package
-also owns the small `Fixtures/StandardChild` lifecycle fixture.
+The required R4OS performance benchmark is `SPECTRA BENCH STANDARD`, suite
+`spectra-standard-2` (Spectra 0.1.2). Each of the five areas actively warms up
+for at least one second and three complete batches before five fixed, longer
+measurements. The scheduler peer acknowledges readiness before timing starts.
+All warmup work and measured samples are retained, with five equally weighted
+scores plus overall. `/AREA:memory` selects a component; `/BASELINE` explicitly
+defines a self-reference. `Tools/Export-StandardBenchmark.ps1` validates the
+guest records and supplies the standalone Schema-1 host export/reference
+comparison. `Baselines/standard-2.reference.json` pins the reference UUID and
+scoring/export hashes; the full run stays in DevCenter or local workspace
+artifacts. The runner resolves the verified local cache or downloads from
+`R4OS_DEVCENTER_API_URL` / `Tools/BenchmarkHost.R4S` (`DEVCENTER_API_URL`).
+Real run exports never belong in Git. `standard-1.reference.json` pins the
+unchanged historical Suite-1 reference. Scores from
+the two suites are not comparable. The package also owns the small
+`Fixtures/StandardChild` lifecycle fixture.
 
 `Build.sh test` includes Zig and PS7 result-contract checks. Workload details,
 normal SMP4 integration and the current import fields are documented in
 R4OS Docs: `Diagnostics/SpectraStandardBenchmark.txt`.
+
+Since 0.1.3, `METRICS STACKS` also reads the latest resident stack failure per
+CPU through the optional R4DEV v14 `stack_fault` slot. Causes, original fault
+address/RSP, reserve/commit/guard bounds and available execution generations
+use the existing text/JSON output. Unknown identities/bounds are null.
+Committed bytes are independent of optional high-water estimates. These
+records last until overwritten or reboot; they are not an event history.

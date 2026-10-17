@@ -88,6 +88,8 @@ pub fn readReference(root: Value, config: Config, detail: bool) Reference {
     const env = field(root, "environment") orelse return result;
     if ((decimal(field(env, "vcpus") orelse return result) orelse return result) != 4 or
         (decimal(field(env, "warmup_runs") orelse return result) orelse return result) != 1 or
+        (decimal(field(env, "warmup_min_ns") orelse return result) orelse return result) != model.warmup_min_ns or
+        (decimal(field(env, "warmup_min_batches") orelse return result) orelse return result) != model.warmup_min_batches or
         (decimal(field(env, "repetitions") orelse return result) orelse return result) != 5 or !isText(env, "cache_state", model.cache_state)) return result;
     const workloads = field(env, "workloads") orelse return result;
     for (model.area_ids, model.workload_ids) |area, workload| if (!isText(workloads, area, workload)) return result;

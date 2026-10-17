@@ -1,4 +1,4 @@
-﻿Spectra - Kernelwerkzeug 0.1.1
+﻿Spectra - Kernelwerkzeug 0.1.3
 =============================
 
 Aufrufe
@@ -8,6 +8,7 @@ LOGS BOOT|SERVICE
 CHECK BOOT|PERFORMANCE|WORK|THREAD|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP
 BENCH CLOCK|BLIT|SERVICE-REGISTRY|KERNEL-IPC|DRIVER-WORK|PCI-INVENTORY|MEMORY-METADATA
 BENCH OBSERVER
+BENCH STANDARD [/AREA:ID] [/BASELINE | /REFERENCE:PATH /COMPAREKEY:KEY]
 
 BOOT /CONFORMANCE setzt einen abgeschlossenen Shellstart voraus; nicht aus
 der noch laufenden Boot-AUTOEXEC aufrufen.
@@ -93,7 +94,9 @@ LOGCENTER besitzt die anderen Logquellen, auch in All und Export.
 SYSINFO bleibt die allgemeine Systemidentitaets-/Hardwareuebersicht.
 SSHD behaelt R4DIAG PING als reine Transportantwort; R4DIAG TASKS entfaellt.
 Die GUI, weitere Fachbereiche, Gesamtrefactor und das externe Datenbanktool
-werden hier nicht implementiert. Benchmarks.jsonl wird nicht benutzt.
+werden hier nicht implementiert. Verbindlicher Performancebenchmark ist
+SPECTRA BENCH STANDARD mit Suite 2; Messablauf und DevCenter-Import:
+Agents/Benchmark.txt.
 
 CHECK STORAGE prueft generische Kernelqueues, Cache, Reclaim und Pagerpfade.
 Der Reclaim-Nachweis verwendet den Snapshot nach der eigenen Probe; ein
@@ -128,11 +131,30 @@ auf den aufrufenden R4X-Besitzer begrenzt. MEMORY und STORAGE ersetzen keine
 Backing-Datei bei lebenden Reservierungen. Der Kernel behaelt deren genaue
 Dateiidentitaet bis zur Freigabe. Produktiver Speicherreclaim bleibt systemweit.
 
-Standardbenchmark 0.83.3
------------------------
+Stackfehler (METRICS STACKS)
+--------------------------
+METRICS STACKS enthaelt seit 0.84.1 auch den letzten residenten Stackfehler
+je CPU. Text/JSON nennen Ursache, originalen RSP/CR2/Fehlercode,
+Reserve/Commit/Guard sowie vorhandene Task-/Instanz-/Threadgenerationen.
+Unbekannte Identitaeten und Grenzen sind null, keine gemessenen Nullwerte.
+Commit ist kein Hochwasser. Eine leere Aufnahme wird als Inventar mit null
+Fehlern gemeldet. Keine Historie; Ueberschreiben und Neustart verwerfen den
+alten Datensatz. R4X-Image/Tag bezeichnen die laufende Instanz, keinen
+bewiesenen Treiber-/Library-RIP-Besitzer. R4DEV v14 ist dafuer erforderlich.
+
+Standardbenchmark Suite 2
+------------------------
 SPECTRA BENCH STANDARD liefert Scheduler/Synchronisation, Speicher, Kernel-IPC,
 Programmlebenszyklus und Datei/I/O getrennt sowie einen gleich gewichteten
-Gesamtindex. Je ein Warmlauf und fuenf feste Messungen. /AREA:<ID> waehlt einen
+Gesamtindex. Seit 0.1.2 gilt spectra-standard-2: je Bereich mindestens eine
+Sekunde aktive Arbeit und drei volle Batches vor fuenf festen Messungen.
+Die ganze Aufwaermarbeit bleibt in einem Rohsample mit echten Gesamtmengen.
+Scheduler-Ready liegt vor Timerstart; Messbatches umfassen 16384 Roundtrips,
+512 VM-Zyklen, 16384 IPC-Anfragen, 32 Kindstarts oder acht Dateizyklen.
+Suite 2 verwendet den Deskriptor standard-2.reference.json; der echte
+Referenzlauf liegt im DevCenter oder lokalen Artefaktcache. Keine echten
+Laufexporte/Rohsamples im Repository. standard-1.reference.json bleibt historisch
+und unveraendert. /AREA:<ID> waehlt einen
 Bereich, /BASELINE einen ausdruecklichen Eigenbezug; /REFERENCE:<Hostexport>
 und /COMPAREKEY:<Methodenhash> einen geprueften Vergleich. Ohne Referenz oder
 bei inkompatibler Methode bleiben Scores null mit Grund. STDCHILD.R4X ist die

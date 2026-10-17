@@ -191,11 +191,11 @@ fn unit(comptime name: []const u8) []const u8 {
     if (std.mem.indexOf(u8, name, "bytes") != null or std.mem.endsWith(u8, name, "_pitch") or std.mem.eql(u8, name, "sector_size")) return "bytes";
     if (std.mem.indexOf(u8, name, "spins") != null) return "iterations";
     if (std.mem.indexOf(u8, name, "flags") != null) return "bitmask";
-    if (std.mem.indexOf(u8, name, "address") != null or std.mem.endsWith(u8, name, "_base") or std.mem.endsWith(u8, name, "_top") or std.mem.eql(u8, name, "base") or std.mem.endsWith(u8, name, "_cr3") or std.mem.eql(u8, name, "active_root_phys") or std.mem.eql(u8, name, "hhdm_offset")) return "address";
+    if (std.mem.indexOf(u8, name, "address") != null or std.mem.endsWith(u8, name, "_base") or std.mem.endsWith(u8, name, "_top") or std.mem.endsWith(u8, name, "_rsp") or std.mem.eql(u8, name, "base") or std.mem.endsWith(u8, name, "_cr3") or std.mem.eql(u8, name, "active_root_phys") or std.mem.eql(u8, name, "hhdm_offset")) return "address";
     if (std.mem.eql(u8, name, "blocked_object") or std.mem.endsWith(u8, name, "_id") or std.mem.eql(u8, name, "id") or std.mem.indexOf(u8, name, "generation") != null or std.mem.indexOf(u8, name, "epoch") != null) return "identifier";
     if (std.mem.eql(u8, name, "size") or std.mem.eql(u8, name, "length") or std.mem.eql(u8, name, "local_mss")) return "bytes";
     if (std.mem.eql(u8, name, "version")) return "version";
-    if (std.mem.eql(u8, name, "state") or std.mem.eql(u8, name, "status") or std.mem.eql(u8, name, "kind") or std.mem.eql(u8, name, "mode") or std.mem.eql(u8, name, "source") or std.mem.endsWith(u8, name, "_source") or std.mem.endsWith(u8, name, "_reason") or std.mem.endsWith(u8, name, "_error")) return "code";
+    if (std.mem.eql(u8, name, "state") or std.mem.eql(u8, name, "status") or std.mem.eql(u8, name, "kind") or std.mem.eql(u8, name, "reason") or std.mem.endsWith(u8, name, "_kind") or std.mem.eql(u8, name, "mode") or std.mem.eql(u8, name, "source") or std.mem.endsWith(u8, name, "_source") or std.mem.endsWith(u8, name, "_reason") or std.mem.endsWith(u8, name, "_error")) return "code";
     return "count";
 }
 

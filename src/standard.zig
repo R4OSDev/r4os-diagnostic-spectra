@@ -14,7 +14,7 @@ var metrics: [5]model.Metric = undefined;
 var write_bytes: [64 * 1024]u8 = undefined;
 var read_bytes: [64 * 1024]u8 = undefined;
 var file_path: [80:0]u8 = undefined;
-var notify_handles: [2]u64 = .{ 0, 0 };
+var notify_handles: [3]u64 = .{ 0, 0, 0 };
 var stop_worker: bool = false;
 var worker_deadline: u64 = 0;
 var cleanup_failed = false;
@@ -59,7 +59,10 @@ fn waitNotification(handle: u64, observed: u64, deadline: u64) Error!void {
     }
 }
 fn peer(_: u64) callconv(.c) i32 {
-    for (0..128) |i| {
+    // Publish readiness before the caller starts its clock. The first request
+    // is also the start gate; notification sequences retain an early signal.
+    if (sys.notificationNotify(notify_handles[2], 1) != a.notification_ok) return 1;
+    for (0..model.operation_counts[0]) |i| {
         waitNotification(notify_handles[0], i, worker_deadline) catch return 1;
         if (sys.notificationNotify(notify_handles[1], 1) != a.notification_ok) return 1;
     }
@@ -71,7 +74,7 @@ fn schedulerSample(deadline: u64) model.Sample {
     return result;
 }
 fn schedulerBody(deadline: u64, result: *model.Sample) void {
-    notify_handles = .{ 0, 0 };
+    notify_handles = .{ 0, 0, 0 };
     @atomicStore(bool, &stop_worker, false, .release);
     worker_deadline = deadline;
     var handle: a.ProgramJoinHandle = .{};
@@ -100,11 +103,15 @@ fn schedulerBody(deadline: u64, result: *model.Sample) void {
         return;
     }
     created = true;
+    waitNotification(notify_handles[2], 0, deadline) catch |err| {
+        result.reason = @errorName(err);
+        return;
+    };
     const start = clock() orelse {
         result.reason = "clock-unavailable";
         return;
     };
-    for (0..128) |i| {
+    for (0..model.operation_counts[0]) |i| {
         if (sys.notificationNotify(notify_handles[0], 1) != a.notification_ok) {
             result.reason = "notification-notify-failed";
             return;
@@ -134,7 +141,7 @@ fn finishSample(result: *model.Sample, start: a.MonotonicClockInfo) void {
     result.reason = null;
 }
 fn memoryWork(result: *model.Sample, deadline: u64) Error!void {
-    for (0..8) |_| {
+    for (0..model.operation_counts[1]) |_| {
         try check(deadline);
         const region = sys.vmReserve(128 * 1024, 4096, 0) orelse return error.WorkFailed;
         var released = false;
@@ -163,7 +170,7 @@ fn memoryWork(result: *model.Sample, deadline: u64) Error!void {
 fn ipcWork(result: *model.Sample, deadline: u64) Error!void {
     const network = net orelse return error.MissingApi;
     var response: [a.ipc_max_message_size]u8 = undefined;
-    for (0..128) |i| {
+    for (0..model.operation_counts[2]) |i| {
         try check(deadline);
         const got = network.netServiceRequest(a.ipc_channel_net_dns, a.net_service_op_dns_status_result, 0x83030000 + @as(u32, @intCast(i)), "", &response);
         if (got < a.net_service_header_size or got > response.len) return error.WorkFailed;
@@ -178,7 +185,7 @@ fn sameHandle(x: a.ProgramProcessHandle, y: a.ProgramProcessHandle) bool {
     return x.instance_id == y.instance_id and x.generation == y.generation and x.reserved == 0 and y.reserved == 0;
 }
 fn lifecycleWork(result: *model.Sample, deadline: u64) Error!void {
-    for (0..4) |_| {
+    for (0..model.operation_counts[3]) |_| {
         try check(deadline);
         var handle: a.ProgramProcessHandle = .{};
         if (sys.programSpawnHandle(child_path, "", .auto, &handle) != a.program_handle_ok) return error.WorkFailed;
@@ -205,7 +212,7 @@ fn lifecycleWork(result: *model.Sample, deadline: u64) Error!void {
 }
 fn filesystemWork(result: *model.Sample, deadline: u64) Error!void {
     if (sys.exists(&file_path)) return error.WorkFailed; // Never replace an unrelated file.
-    for (0..8) |_| {
+    for (0..model.operation_counts[4]) |_| {
         try check(deadline);
         if (sys.fileStreamBegin(&file_path, a.file_stream_open_replace) < 0) return error.WorkFailed;
         var finished = false;
@@ -223,6 +230,48 @@ fn filesystemWork(result: *model.Sample, deadline: u64) Error!void {
         result.operations += 1;
         result.bytes += write_bytes.len * 2;
     }
+}
+fn takeSample(index: usize, deadline: u64) model.Sample {
+    if (index == 0) return schedulerSample(deadline);
+    var result: model.Sample = .{};
+    const start = clock() orelse return .{ .reason = "clock-unavailable" };
+    const work = switch (index) {
+        1 => memoryWork(&result, deadline),
+        2 => ipcWork(&result, deadline),
+        3 => lifecycleWork(&result, deadline),
+        4 => filesystemWork(&result, deadline),
+        else => unreachable,
+    };
+    work catch |err| {
+        result.reason = @errorName(err);
+        return result;
+    };
+    finishSample(&result, start);
+    return result;
+}
+fn activeWarmup(index: usize, deadline: u64) model.Sample {
+    var total: model.Sample = .{};
+    var batches: u64 = 0;
+    while (batches < model.warmup_min_batches or total.elapsed_ns < model.warmup_min_ns) {
+        check(deadline) catch |err| {
+            total.reason = @errorName(err);
+            return total;
+        };
+        const part = takeSample(index, deadline);
+        if (part.reason != null or cleanup_failed) return part;
+        if (part.operations != model.operation_counts[index] or part.bytes != model.byte_counts[index]) return .{ .reason = "warmup-work-mismatch" };
+        if (batches == 0) {
+            total = part;
+        } else {
+            if (part.clock_source != total.clock_source or part.clock_generation != total.clock_generation) return .{ .reason = "warmup-clock-changed" };
+            total.elapsed_ns += part.elapsed_ns;
+            total.operations += part.operations;
+            total.bytes += part.bytes;
+            total.clock_resolution_ns = @max(total.clock_resolution_ns, part.clock_resolution_ns);
+        }
+        batches += 1;
+    }
+    return total;
 }
 pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     const config = @import("standard_reference.zig").parseOptions(request.args()) catch {
@@ -275,32 +324,19 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
                 continue;
             };
             const deadline = @min(run_deadline, (now() catch run_deadline) +| 10_000_000_000);
-            if (index == 0) sample.* = schedulerSample(deadline) else {
-                const start = clock() orelse {
-                    sample.reason = "clock-unavailable";
-                    exit_code = 1;
-                    continue;
-                };
-                sample.* = .{};
-                const work = switch (index) {
-                    1 => memoryWork(sample, deadline),
-                    2 => ipcWork(sample, deadline),
-                    3 => lifecycleWork(sample, deadline),
-                    4 => filesystemWork(sample, deadline),
-                    else => unreachable,
-                };
-                work catch |err| {
-                    sample.reason = @errorName(err);
-                    exit_code = if (err == error.Cancelled) 4 else 1;
-                    continue;
-                };
-                finishSample(sample, start);
-            }
-            if (sample.reason != null or sample.operations != model.operation_counts[index] or sample.bytes != model.byte_counts[index]) {
+            sample.* = if (repetition == 0) activeWarmup(index, deadline) else takeSample(index, deadline);
+            const batches = sample.operations / model.operation_counts[index];
+            const work_valid = if (repetition == 0)
+                batches >= model.warmup_min_batches and sample.operations % model.operation_counts[index] == 0 and sample.bytes == model.byte_counts[index] * batches and sample.elapsed_ns >= model.warmup_min_ns
+            else
+                sample.operations == model.operation_counts[index] and sample.bytes == model.byte_counts[index];
+            if (sample.reason != null or !work_valid or cleanup_failed) {
                 if (sample.reason == null) sample.reason = "work-count-mismatch";
                 exit_code = 1;
             }
-            _ = repetition;
+            if (sample.reason) |why| if (std.mem.eql(u8, why, "Cancelled")) {
+                exit_code = 4;
+            };
         }
         metrics[index] = model.aggregate(area, model.operation_counts[index]);
         if (metrics[index].reason != null) exit_code = 1;

@@ -1,14 +1,16 @@
 //! Fixed work and scoring contract, independent of guest APIs/presentation.
 const std = @import("std");
-pub const suite_version = "spectra-standard-1";
+pub const suite_version = "spectra-standard-2";
 pub const scoring_version = "spectra-geomean-1";
-pub const cache_state = "warm-per-area-1";
+pub const cache_state = "active-per-area-1s-3batches-v2";
+pub const warmup_min_ns: u64 = 1_000_000_000;
+pub const warmup_min_batches: u64 = 3;
 pub const warmup_runs = 1;
 pub const repetitions = 5;
 pub const area_ids = [_][]const u8{ "scheduler_sync", "memory", "ipc", "lifecycle", "filesystem_io" };
-pub const operation_counts = [_]u64{ 128, 8, 128, 4, 8 };
-pub const byte_counts = [_]u64{ 0, 8 * 128 * 1024, 128 * 24, 0, 8 * 64 * 1024 * 2 };
-pub const workload_ids = [_][]const u8{ "notification-roundtrip-128-v1", "demand-vm-8x128k-v1", "kernel-dns-status-128-v1", "owned-fixture-4-v1", "ntfs-stream-8x64k-v1" };
+pub const operation_counts = [_]u64{ 16384, 512, 16384, 32, 8 };
+pub const byte_counts = [_]u64{ 0, 512 * 128 * 1024, 16384 * 24, 0, 8 * 64 * 1024 * 2 };
+pub const workload_ids = [_][]const u8{ "notification-ready-roundtrip-16384-v2", "demand-vm-512x128k-v2", "kernel-dns-status-16384-v2", "owned-fixture-32-v2", "ntfs-stream-8x64k-v1" };
 pub const metric_id = "elapsed_ns_per_operation";
 pub const Sample = struct {
     elapsed_ns: u64 = 0,
@@ -32,7 +34,11 @@ pub fn aggregate(samples: *const [repetitions + warmup_runs]Sample, operations: 
     var values: [repetitions]u64 = undefined;
     for (samples, 0..) |sample, i| {
         if (sample.reason) |why| return .{ .reason = why };
-        if (sample.operations != operations or sample.elapsed_ns == 0 or sample.clock_resolution_ns == 0 or
+        const work_valid = if (i == 0)
+            sample.operations >= operations * warmup_min_batches and sample.operations % operations == 0 and sample.elapsed_ns >= warmup_min_ns
+        else
+            sample.operations == operations;
+        if (!work_valid or sample.elapsed_ns == 0 or sample.clock_resolution_ns == 0 or
             @as(u128, sample.elapsed_ns) < @as(u128, sample.clock_resolution_ns) * 10)
             return .{ .reason = "insufficient-completed-work-or-clock-resolution" };
         if (i != 0) values[i - 1] = sample.elapsed_ns;
@@ -70,6 +76,8 @@ test "reference, relative speed and equal five-area weights" {
 }
 test "warmup, failures and unresolved intervals prevent usable metrics" {
     var samples = [_]Sample{.{ .elapsed_ns = 1000, .operations = 8, .clock_resolution_ns = 1, .reason = null }} ** 6;
+    samples[0].operations = 8 * warmup_min_batches;
+    samples[0].elapsed_ns = warmup_min_ns;
     samples[1].elapsed_ns = 800;
     samples[2].elapsed_ns = 900;
     samples[4].elapsed_ns = 1100;
@@ -80,6 +88,9 @@ test "warmup, failures and unresolved intervals prevent usable metrics" {
     samples[0].reason = "warmup-failed";
     try std.testing.expect(aggregate(&samples, 8).reason != null);
     samples[0].reason = null;
+    samples[0].elapsed_ns = warmup_min_ns - 1;
+    try std.testing.expect(aggregate(&samples, 8).reason != null);
+    samples[0].elapsed_ns = warmup_min_ns;
     samples[3].clock_resolution_ns = 101;
     try std.testing.expect(aggregate(&samples, 8).reason != null);
 }

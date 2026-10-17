@@ -3,20 +3,22 @@
   "schema_version": 1,
   "run_id": "83030000-0000-4000-8000-000000000001",
   "status": "completed",
-  "suite_version": "spectra-standard-1",
+  "suite_version": "spectra-standard-2",
   "scoring_version": "spectra-geomean-1",
   "comparison_key": "fixture-method",
   "instrumentation_mode": "base",
   "environment": {
     "vcpus": "4",
     "warmup_runs": "1",
+    "warmup_min_ns": "1000000000",
+    "warmup_min_batches": "3",
     "repetitions": "5",
-    "cache_state": "warm-per-area-1",
+    "cache_state": "active-per-area-1s-3batches-v2",
     "workloads": {
-      "scheduler_sync": "notification-roundtrip-128-v1",
-      "memory": "demand-vm-8x128k-v1",
-      "ipc": "kernel-dns-status-128-v1",
-      "lifecycle": "owned-fixture-4-v1",
+      "scheduler_sync": "notification-ready-roundtrip-16384-v2",
+      "memory": "demand-vm-512x128k-v2",
+      "ipc": "kernel-dns-status-16384-v2",
+      "lifecycle": "owned-fixture-32-v2",
       "filesystem_io": "ntfs-stream-8x64k-v1"
     }
   },

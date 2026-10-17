@@ -51,10 +51,12 @@ pub fn render(out: *Output, samples: *const [5][6]model.Sample, metrics: *const 
         record(out, "header");
         str(out, "suite_version", model.suite_version);
         str(out, "scoring_version", model.scoring_version);
-        str(out, "spectra_version", "0.1.1");
+        str(out, "spectra_version", "0.1.3");
         str(out, "instrumentation_mode", if (out.detail orelse false) "detail" else "base");
         str(out, "cache_state", model.cache_state);
         number(out, "warmup_runs", 1);
+        number(out, "warmup_min_ns", model.warmup_min_ns);
+        number(out, "warmup_min_batches", model.warmup_min_batches);
         number(out, "repetitions", 5);
         number(out, "vcpus", 4);
         number(out, "settle_ms", config.settle_ms);
@@ -97,7 +99,7 @@ pub fn render(out: *Output, samples: *const [5][6]model.Sample, metrics: *const 
                 optionalNumber(out, "clock_generation", if (sample.clock_generation != 0) sample.clock_generation else null);
                 optionalNumber(out, "clock_resolution_ns", if (sample.clock_resolution_ns != 0) sample.clock_resolution_ns else null);
                 optionalNumber(out, "observer_overhead_ns", sample.observer_overhead_ns);
-                quantity(out, "value", sample.elapsed_ns, model.operation_counts[index], sample.reason == null);
+                quantity(out, "value", sample.elapsed_ns, sample.operations, sample.reason == null);
                 out.write("}\n");
             }
             record(out, "metric");

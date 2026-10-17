@@ -9,3 +9,7 @@
 
 .DS_Store
 Thumbs.db
+
+# Real benchmark exports live in DevCenter or local workspace artifacts.
+/Baselines/*.json
+!/Baselines/*.reference.json

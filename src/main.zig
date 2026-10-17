@@ -21,7 +21,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     var result: i32 = 0;
     switch (request.command) {
         .help => output.message("help",
-            "SPECTRA 0.1.1 - kernel diagnostics\r\n" ++
+            "SPECTRA 0.1.3 - kernel diagnostics\r\n" ++
             "  METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE\r\n" ++
             "  LOGS BOOT|SERVICE\r\n" ++
             "  CHECK BOOT|PERFORMANCE|WORK|THREAD|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP [options]\r\n" ++
