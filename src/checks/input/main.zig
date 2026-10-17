@@ -1,4 +1,5 @@
 const r4os = @import("r4os");
+const std = @import("std");
 
 const DiagApi = struct {
     sys: r4os.r4sys.Context,
@@ -18,6 +19,14 @@ const DiagApi = struct {
 
 pub fn r4_app_main(r4_app: *r4os.App) i32 {
     var ctx = DiagApi.init(r4_app) orelse return r4os.abi.err_no_group;
+    var args = std.mem.tokenizeAny(u8, r4_app.args(), " \t");
+    var modifiers = false;
+    var resync_only = false;
+    while (args.next()) |arg| {
+        if (@import("../../cli.zig").same(arg, "/MODIFIERS")) modifiers = true;
+        if (@import("../../cli.zig").same(arg, "/RESYNC")) resync_only = true;
+    }
+    if (modifiers) return @import("modifiers.zig").run(&ctx.sys, &ctx.desk, resync_only);
     var mouse: r4os.abi.Mouse = undefined;
     ctx.desk.mouseState(&mouse);
 
