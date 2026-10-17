@@ -1,4 +1,4 @@
-﻿Spectra - Kernelwerkzeug 0.1.5
+﻿Spectra - Kernelwerkzeug 0.1.6
 =============================
 
 Aufrufe
@@ -16,6 +16,7 @@ der noch laufenden Boot-AUTOEXEC aufrufen.
 CHECK uebernimmt die fachlichen Optionen der bisherigen Pruefung. Beispiele:
   SPECTRA CHECK BOOT /CONFORMANCE
   SPECTRA CHECK FILESYSTEM F /PAGECACHE
+  SPECTRA CHECK ASYNC_IO /LENGTHS
   SPECTRA CHECK STACK /RECOVERY
   SPECTRA CHECK THREAD /PROCESSEXIT
   SPECTRA CHECK LIFECYCLE /PROGRAMLIFECYCLE

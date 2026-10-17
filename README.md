@@ -59,3 +59,7 @@ Since 0.1.5, explicit `CHECK STACK /RECOVERY` exhausts its own main/worker
 child stacks and requires failed/-4096 completion, peer retirement, reap
 and exact resident fault identities. Critical or unclear contexts retain
 the terminal kernel path; the existing reservations stay unchanged.
+
+Since 0.1.6, `CHECK ASYNC_IO /LENGTHS` probes signed-result limits through
+real ABI calls with small buffers. It checks rejection before admission,
+unchanged files/live streams and the existing 64-bit range-read offset.

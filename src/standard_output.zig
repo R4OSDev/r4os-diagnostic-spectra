@@ -51,7 +51,7 @@ pub fn render(out: *Output, samples: *const [5][6]model.Sample, metrics: *const 
         record(out, "header");
         str(out, "suite_version", model.suite_version);
         str(out, "scoring_version", model.scoring_version);
-        str(out, "spectra_version", "0.1.5");
+        str(out, "spectra_version", "0.1.6");
         str(out, "instrumentation_mode", if (out.detail orelse false) "detail" else "base");
         str(out, "cache_state", model.cache_state);
         number(out, "warmup_runs", 1);
