@@ -80,3 +80,10 @@ schedulable CPUs report unavailable without starting work. Global timeout
 injection and other boot-only acceptance cases remain isolated. `METRICS SMP`
 only reads current CPU/clock registrations and actual TLB counters; a passive
 snapshot never claims a historical check pass or supplies a benchmark score.
+
+Since 0.1.14, `CHECK STORAGE /BLOCKQUEUE[:ADMISSION]` reuses the native
+synthetic block dispatcher and async queue cases. It owns exact task/device/
+request generations and completion receipts, drains before unregistering all
+three own controller registrations, and retains unacknowledged resources.
+It selects no physical test disk and performs no global queue/counter reset.
+METRICS stays passive; default STORAGE checks retain their existing selection.

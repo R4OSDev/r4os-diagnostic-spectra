@@ -119,7 +119,15 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     } else {
         if (cli.same(group, "smp")) result = @import("checks/smp.zig").run(&adapted, args, out);
         if (cli.same(group, "vm")) result = @import("checks/vm/main.zig").r4_app_main(&adapted);
-        if (cli.same(group, "storage")) result = @import("checks/storage/main.zig").r4_app_main(&adapted);
+        if (cli.same(group, "storage")) {
+            var options = cli.Tokens{ .input = args };
+            var block_queue_selected = false;
+            while (options.next() catch return 2) |token| {
+                if (std.ascii.startsWithIgnoreCase(token, "/BLOCKQUEUE")) block_queue_selected = true;
+            }
+            if (block_queue_selected) result = @import("checks/storage/block_queue.zig").run(&adapted, args, out)
+            else result = @import("checks/storage/main.zig").r4_app_main(&adapted);
+        }
         if (cli.same(group, "tcp")) result = @import("checks/tcp/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "boot")) result = @import("checks/boot/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "work")) result = @import("checks/work/main.zig").r4_app_main(&adapted);
