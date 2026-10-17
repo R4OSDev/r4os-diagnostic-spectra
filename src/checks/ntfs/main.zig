@@ -143,6 +143,9 @@ pub fn r4_app_main(app: *r4os.App) i32 {
 
     ctx.println("SPECTRA NTFS");
 
+    if (hasFlag(app.args(), "/UNITCACHE")) {
+        return @import("unit_cache.zig").run(app);
+    }
     if (hasFlag(app.args(), "/INITIALIZED")) {
         return @import("initialized.zig").run(&ctx, &files);
     }
