@@ -117,6 +117,7 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     if (request.command == .bench or cli.same(group, "PERFORMANCE")) {
         result = @import("checks/performance/main.zig").r4_app_main(&adapted);
     } else {
+        if (cli.same(group, "usb")) result = @import("checks/usb.zig").run(&adapted, args, out);
         if (cli.same(group, "smp")) result = @import("checks/smp.zig").run(&adapted, args, out);
         if (cli.same(group, "vm")) result = @import("checks/vm/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "storage")) {
