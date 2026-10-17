@@ -29,6 +29,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "  CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION] (bounded native checks)\r\n" ++
             "  CHECK MEMORY /KERNELHEAP (bounded kernel allocator cases and own cleanup)\r\n" ++
             "  CHECK STORAGE /BLOCKQUEUE[:ADMISSION] (owned synthetic blockqueue cases)\r\n" ++
+            "  CHECK STORAGE /NVMEIRQ (one read-only exact IRQ/completion proof)\r\n" ++
             "  BENCH CLOCK|BLIT|SERVICE-REGISTRY|KERNEL-IPC|DRIVER-WORK|PCI-INVENTORY|MEMORY-METADATA [options]\r\n" ++
             "  BENCH OBSERVER (console cost comparison)\r\n" ++
             "  BENCH STANDARD [/AREA:scheduler_sync|memory|ipc|lifecycle|filesystem_io]\r\n" ++

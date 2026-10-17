@@ -122,10 +122,13 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
         if (cli.same(group, "storage")) {
             var options = cli.Tokens{ .input = args };
             var block_queue_selected = false;
+            var nvme_irq_selected = false;
             while (options.next() catch return 2) |token| {
                 if (std.ascii.startsWithIgnoreCase(token, "/BLOCKQUEUE")) block_queue_selected = true;
+                if (std.ascii.startsWithIgnoreCase(token, "/NVMEIRQ")) nvme_irq_selected = true;
             }
-            if (block_queue_selected) result = @import("checks/storage/block_queue.zig").run(&adapted, args, out)
+            if (nvme_irq_selected) result = @import("checks/storage/nvme_irq.zig").run(&adapted, args, out)
+            else if (block_queue_selected) result = @import("checks/storage/block_queue.zig").run(&adapted, args, out)
             else result = @import("checks/storage/main.zig").r4_app_main(&adapted);
         }
         if (cli.same(group, "tcp")) result = @import("checks/tcp/main.zig").r4_app_main(&adapted);
