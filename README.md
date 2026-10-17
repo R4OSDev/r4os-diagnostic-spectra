@@ -49,3 +49,8 @@ address/RSP, reserve/commit/guard bounds and available execution generations
 use the existing text/JSON output. Unknown identities/bounds are null.
 Committed bytes are independent of optional high-water estimates. These
 records last until overwritten or reboot; they are not an event history.
+
+Since 0.1.4, `CHECK STACK` also checks a single 384-KB frame aligned to 8 KB
+with volatile page writes/readback, alongside recursive growth. It covers
+the shared compiler's pagewise allocation and alignment probes. The existing
+reserve and the STANDARD workloads remain unchanged.

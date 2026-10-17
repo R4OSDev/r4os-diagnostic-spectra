@@ -1,4 +1,4 @@
-﻿Spectra - Kernelwerkzeug 0.1.3
+﻿Spectra - Kernelwerkzeug 0.1.4
 =============================
 
 Aufrufe
@@ -15,9 +15,13 @@ der noch laufenden Boot-AUTOEXEC aufrufen.
 
 CHECK uebernimmt die fachlichen Optionen der bisherigen Pruefung. Beispiele:
   SPECTRA CHECK BOOT /CONFORMANCE
-  SPECTRA CHECK FILESYSTEM /PAGECACHE
+  SPECTRA CHECK FILESYSTEM F /PAGECACHE
   SPECTRA CHECK THREAD /PROCESSEXIT
   SPECTRA CHECK LIFECYCLE /PROGRAMLIFECYCLE
+/PAGECACHE braucht das ausdruecklich gewaehlte FAT32-Testvolume mit TEMP-Ordner.
+Der reguläre Headless-Test liefert F: auf einem separaten 64-MB-Medium;
+interne Recovery-Partitionen sind keine Testfixtures. Die Besitzerpruefung
+bindet Volume und Geraet ueber deren strukturierte Storage-Identitaet.
 PERFORMANCE prueft nur Konformitaet. Seine Benchmarks werden ausschliesslich
 mit BENCH gestartet; je Suite gelten weiterhin 3..20 Wiederholungen und die
 bisherigen begrenzten Last-/Aufraeumvertraege. OBSERVER misst auch reale
@@ -83,6 +87,13 @@ Kernelereigniszeitpunkt; die Schwere ist die Klassifizierung von LOGSVC.
 Waehrend einer veraenderten Paginierung werden Teilseiten verworfen.
 Explizite Stack-Traces kommen seit Kernel 0.1.265 auch in den begrenzten
 Bootlog; normale Programmstarts formatieren deshalb keine zusaetzlichen Texte.
+
+CHECK STACK prueft zusaetzlich zum bestehenden rekursiven Wachstum einen
+einzelnen 384-KB-Frame mit 8-KB-Ausrichtung und volatilen Seitenzugriffen.
+Damit werden seit 0.84.3 auch grosse Prologe und Ausrichtungsluecken vor der
+ersten Datennutzung geprueft. CSTARTD /STACKPROBE prueft denselben Fall beim
+C-Frontend; kein Teil von STANDARD. Beide Faelle bestaetigen Wachstum
+innerhalb der Reserve, nicht den kontrollierten Abbruch bei Erschoepfung.
 
 Besitzgrenze
 ------------

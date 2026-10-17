@@ -189,7 +189,7 @@ fn checkFacadeRead(ctx: *const r4os.r4sys.Context, files: *const r4os.Files) boo
 
 fn checkStorageOwnership(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context, letter: u8) bool {
     var rec: r4os.abi.DeviceInventoryRecord = .{};
-    const found = findMountedStorageRecord(dev, letter, &rec);
+    const found = findMountedStorageRecord(ctx, dev, letter, &rec);
     ctx.write("storage ");
     ctx.putc(letter);
     ctx.write(": ");
@@ -210,19 +210,40 @@ fn checkStorageOwnership(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.
     return ok;
 }
 
-fn findMountedStorageRecord(dev: *const r4os.r4dev.Context, letter: u8, out: *r4os.abi.DeviceInventoryRecord) bool {
+fn findMountedStorageRecord(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context, letter: u8, out: *r4os.abi.DeviceInventoryRecord) bool {
+    const storage = r4os.storage.Context{ .sys = ctx };
+    var before: r4os.abi.StorageInventory = .{};
+    if (storage.inventory(&before) != 0) return false;
+    var device: r4os.abi.StorageDeviceInfo = .{};
+    var found_volume = false;
+    var slot: u32 = 0;
+    while (slot < before.volume_slots) : (slot += 1) {
+        var volume: r4os.abi.StorageVolumeInfo = .{};
+        if (storage.volume(before.generation, slot, &volume) != r4os.abi.storage_result_present or volume.letter != letter) continue;
+        if (storage.device(before.generation, volume.target.device.slot, &device) != r4os.abi.storage_result_present or
+            device.reference.slot != volume.target.device.slot or
+            device.reference.generation != volume.target.device.generation) return false;
+        found_volume = true;
+        break;
+    }
+    if (!found_volume) return false;
+
+    // Inventory status is a display label ("mounted" beyond C:/D:/E:),
+    // so bind the selected volume through its generation-checked device.
     var summary: r4os.abi.DeviceInventorySummary = .{};
     if (dev.deviceInventorySummary(&summary) <= 0) return false;
+    var matches: u32 = 0;
     var index: u32 = 0;
     while (index < summary.total) : (index += 1) {
         var rec: r4os.abi.DeviceInventoryRecord = .{};
-        if (dev.deviceInventoryRecord(index, &rec) <= 0) continue;
-        if (rec.bus != 4) continue;
-        if (!storageStatusForLetter(rec.status[0..], letter)) continue;
+        if (dev.deviceInventoryRecord(index, &rec) <= 0 or rec.bus != 4) continue;
+        if (!memEql(spanZ(rec.name[0..]), spanZ(device.name[0..])) or
+            !memEql(spanZ(rec.driver[0..]), spanZ(device.driver[0..]))) continue;
         out.* = rec;
-        return true;
+        matches += 1;
     }
-    return false;
+    var after: r4os.abi.StorageInventory = .{};
+    return matches == 1 and storage.inventory(&after) == 0 and before.generation == after.generation;
 }
 
 fn checkExists(ctx: *const r4os.r4sys.Context, path: [*:0]const u8) bool {
@@ -2164,14 +2185,6 @@ fn writeFixedZ(ctx: *const r4os.r4sys.Context, value: []const u8) void {
     } else {
         ctx.write(text);
     }
-}
-
-fn storageStatusForLetter(value: []const u8, letter: u8) bool {
-    const status = spanZ(value);
-    return status.len == 9 and
-        status[0] == 'm' and status[1] == 'o' and status[2] == 'u' and status[3] == 'n' and
-        status[4] == 't' and status[5] == 'e' and status[6] == 'd' and status[7] == '-' and
-        status[8] == letter;
 }
 
 fn spanZ(value: []const u8) []const u8 {
