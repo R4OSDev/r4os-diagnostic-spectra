@@ -4,8 +4,8 @@
 // content of the Windows-formatted fixture volume NTFS4K: deterministic
 // pattern files (same xorshift32 generator as New-NtfsFixtures0603.ps1),
 // the fragmented 2 MB file, sparse structure, the 320-entry B+ tree
-// directory, long/mixed-case name resolution, visible rejection of
-// compressed content and of every write on the read-only volume.
+// directory, long/mixed-case name resolution and readable compressed
+// content. /INITIALIZED selects a disposable boundary fixture.
 
 const r4os = @import("r4os");
 
@@ -142,6 +142,10 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     const files = app.files() orelse return r4os.abi.err_no_fn;
 
     ctx.println("SPECTRA NTFS");
+
+    if (hasFlag(app.args(), "/INITIALIZED")) {
+        return @import("initialized.zig").run(&ctx, &files);
+    }
 
     // Locate the first NTFS drive BESIDES the system volume: since 0.60.9
     // C: itself is NTFS, but the diagnostic volumes arrive as second disks.
