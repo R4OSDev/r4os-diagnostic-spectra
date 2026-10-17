@@ -1,4 +1,4 @@
-﻿Spectra - Kernelwerkzeug 0.1.4
+﻿Spectra - Kernelwerkzeug 0.1.5
 =============================
 
 Aufrufe
@@ -16,6 +16,7 @@ der noch laufenden Boot-AUTOEXEC aufrufen.
 CHECK uebernimmt die fachlichen Optionen der bisherigen Pruefung. Beispiele:
   SPECTRA CHECK BOOT /CONFORMANCE
   SPECTRA CHECK FILESYSTEM F /PAGECACHE
+  SPECTRA CHECK STACK /RECOVERY
   SPECTRA CHECK THREAD /PROCESSEXIT
   SPECTRA CHECK LIFECYCLE /PROGRAMLIFECYCLE
 /PAGECACHE braucht das ausdruecklich gewaehlte FAT32-Testvolume mit TEMP-Ordner.
@@ -94,6 +95,13 @@ Damit werden seit 0.84.3 auch grosse Prologe und Ausrichtungsluecken vor der
 ersten Datennutzung geprueft. CSTARTD /STACKPROBE prueft denselben Fall beim
 C-Frontend; kein Teil von STANDARD. Beide Faelle bestaetigen Wachstum
 innerhalb der Reserve, nicht den kontrollierten Abbruch bei Erschoepfung.
+
+CHECK STACK /RECOVERY startet seit 0.84.4 zwei eigene Kindprozesse mit
+absichtlicher Stackerschoepfung: Hauptthread und Arbeitsthread samt wartendem
+Peer. Es verlangt jeweils failed/-4096, vollstaendige Beendigung/Freigabe und
+den genauen residenten Fehlerdatensatz. Nur die eigene terminale Guardseite
+in einem zugelassenen normalen Kontext ist abfangbar; kritische oder unklare
+Faelle behalten den terminalen Kernelpfad. Reserven bleiben unveraendert.
 
 Besitzgrenze
 ------------

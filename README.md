@@ -54,3 +54,8 @@ Since 0.1.4, `CHECK STACK` also checks a single 384-KB frame aligned to 8 KB
 with volatile page writes/readback, alongside recursive growth. It covers
 the shared compiler's pagewise allocation and alignment probes. The existing
 reserve and the STANDARD workloads remain unchanged.
+
+Since 0.1.5, explicit `CHECK STACK /RECOVERY` exhausts its own main/worker
+child stacks and requires failed/-4096 completion, peer retirement, reap
+and exact resident fault identities. Critical or unclear contexts retain
+the terminal kernel path; the existing reservations stay unchanged.
