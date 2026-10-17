@@ -1,5 +1,6 @@
 const r4os = @import("r4os");
 const std = @import("std");
+const resource_balance = @import("resource_balance.zig");
 
 const KB: u64 = 1024;
 const MB: u64 = 1024 * KB;
@@ -53,15 +54,10 @@ fn loadPageWithLiveSimd(address: [*]const u8) struct { byte: u8, simd_ok: bool }
     return .{ .byte = byte, .simd_ok = std.mem.eql(u32, &pattern, &observed) };
 }
 
-const ResourceTotals = struct {
-    blocks: u64 = 0,
-    program_images: u64 = 0,
-    vm_ranges: u64 = 0,
-    app_stacks: u64 = 0,
-    reserved: u64 = 0,
-    committed: u64 = 0,
-    physical: u64 = 0,
-    virtual: u64 = 0,
+const ResourceTotals = resource_balance.Totals;
+const CleanupSnapshot = struct {
+    totals: ResourceTotals,
+    stack: resource_balance.Stack,
 };
 
 const VmStressStats = struct {
@@ -212,7 +208,8 @@ const App = struct {
         // regions while this profile runs.  Leak accounting therefore binds
         // to the exact SPECTRA MEMORY owner; spawned-child cleanup is checked
         // separately by owner ID in testKillCommittedVm.
-        const before = self.resourceTotalsForOwner(owner_id);
+        const before_snapshot = self.cleanupSnapshot(owner_id) orelse return self.failBool("vmstress cleanup baseline unavailable");
+        const before = before_snapshot.totals;
         var stats = VmStressStats{
             .table_before = self.resourceTotals().blocks,
             .table_during = self.resourceTotals().blocks,
@@ -225,9 +222,11 @@ const App = struct {
         ok = self.testVmLimitAccounting(&stats) and ok;
         ok = self.testKillCommittedVm(&stats) and ok;
 
-        const after = self.resourceTotalsForOwner(owner_id);
+        const after_snapshot = self.cleanupSnapshot(owner_id) orelse return self.failBool("vmstress cleanup snapshot unavailable");
+        const after = after_snapshot.totals;
         stats.table_after = self.resourceTotals().blocks;
-        stats.cleanup_ok = sameTotals(before, after);
+        stats.cleanup_ok = resource_balance.sameWithGrowingStack(before, after, before_snapshot.stack, after_snapshot.stack);
+        self.printStackBalance("vmstress", before_snapshot.stack, after_snapshot.stack);
         if (!stats.cleanup_ok) {
             self.printTotals("vmstress-before", before);
             self.printTotals("vmstress-after", after);
@@ -988,7 +987,8 @@ const App = struct {
         self.ctx.sys.println("SPECTRA MEMORY pagerstress");
         const current = self.currentMemoryInfo() orelse return self.failBool("pagerstress current owner unavailable");
         const owner_id = current.id;
-        const before_totals = self.resourceTotalsForOwner(owner_id);
+        const before_snapshot = self.cleanupSnapshot(owner_id) orelse return self.failBool("pagerstress cleanup baseline unavailable");
+        const before_totals = before_snapshot.totals;
         const before_perf = self.ctx.dev.performanceSummary() orelse return self.failBool("pagerstress baseline unavailable");
         if (before_perf.memory_backing_store_slot_reserved != 0) return self.failBool("backing store in use; refusing to replace diagnostic backing");
         var stats: PagerStressStats = .{};
@@ -1095,8 +1095,10 @@ const App = struct {
         }
         if (!responsiveness_ok) ok = false;
 
-        const after_totals = self.resourceTotalsForOwner(owner_id);
-        stats.cleanup_ok = sameTotals(before_totals, after_totals);
+        const after_snapshot = self.cleanupSnapshot(owner_id) orelse return self.failBool("pagerstress cleanup snapshot unavailable");
+        const after_totals = after_snapshot.totals;
+        stats.cleanup_ok = resource_balance.sameWithGrowingStack(before_totals, after_totals, before_snapshot.stack, after_snapshot.stack);
+        self.printStackBalance("pagerstress", before_snapshot.stack, after_snapshot.stack);
         if (!stats.cleanup_ok) {
             self.printTotals("pagerstress-before", before_totals);
             self.printTotals("pagerstress-after", after_totals);
@@ -1956,6 +1958,42 @@ const App = struct {
         self.ctx.sys.println(if (stats.cleanup_ok) "OK" else "FAILED");
     }
 
+    fn cleanupSnapshot(self: *App, owner_id: u32) ?CleanupSnapshot {
+        // Reading the catalogue can itself need more caller-stack headroom.
+        // Take a new bounded snapshot if that happened during collection.
+        for (0..3) |_| {
+            const before = self.currentMemoryInfo() orelse return null;
+            if (before.id != owner_id) return null;
+            const totals = self.resourceTotalsForOwner(owner_id);
+            const after = self.currentMemoryInfo() orelse return null;
+            if (after.id != owner_id) return null;
+            if (before.stack_reserved_bytes != after.stack_reserved_bytes or
+                before.stack_committed_bytes != after.stack_committed_bytes) continue;
+            return .{ .totals = totals, .stack = .{
+                .owner_id = owner_id,
+                .reserved = after.stack_reserved_bytes,
+                .committed = after.stack_committed_bytes,
+            } };
+        }
+        return null;
+    }
+
+    fn printStackBalance(self: *App, label: []const u8, before: resource_balance.Stack, after: resource_balance.Stack) void {
+        self.ctx.sys.write("SPECTRA MEMORY ");
+        self.ctx.sys.write(label);
+        self.ctx.sys.write(" stack: owner=");
+        self.ctx.sys.printU64(before.owner_id);
+        self.ctx.sys.write(" reserved=");
+        self.ctx.sys.printU64(before.reserved);
+        self.ctx.sys.write("->");
+        self.ctx.sys.printU64(after.reserved);
+        self.ctx.sys.write(" committed=");
+        self.ctx.sys.printU64(before.committed);
+        self.ctx.sys.write("->");
+        self.ctx.sys.printU64(after.committed);
+        self.ctx.sys.println("");
+    }
+
     fn printTotals(self: *App, label: []const u8, totals: ResourceTotals) void {
         self.ctx.sys.write("SPECTRA MEMORY ");
         self.ctx.sys.write(label);
@@ -2055,14 +2093,7 @@ fn isTrackedKind(kind: u8) bool {
 }
 
 fn sameTotals(a: ResourceTotals, b: ResourceTotals) bool {
-    return a.blocks == b.blocks and
-        a.program_images == b.program_images and
-        a.vm_ranges == b.vm_ranges and
-        a.app_stacks == b.app_stacks and
-        a.reserved == b.reserved and
-        a.committed == b.committed and
-        a.physical == b.physical and
-        a.virtual == b.virtual;
+    return resource_balance.same(a, b);
 }
 
 fn pressureReclaimSourcesOk(
