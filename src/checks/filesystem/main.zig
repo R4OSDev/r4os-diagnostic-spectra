@@ -56,6 +56,12 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     var ok = true;
 
     ctx.println("SPECTRA FILESYSTEM");
+    if (containsIgnoreCase(app.args(), "/READERS")) {
+        ok = @import("parallel_readers.zig").run(&ctx, &dev);
+        ctx.print("SPECTRA FILESYSTEM result: ");
+        ctx.println(if (ok) "OK" else "FAILED");
+        return if (ok) 0 else 1;
+    }
     if (containsIgnoreCase(app.args(), "/FATDIR")) {
         @import("fat_directory.zig").run(&ctx) catch |err| {
             ctx.write("SPECTRA FILESYSTEM fat-directory: FAILED reason=");
