@@ -122,7 +122,15 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
         if (cli.same(group, "tcp")) result = @import("checks/tcp/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "boot")) result = @import("checks/boot/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "work")) result = @import("checks/work/main.zig").r4_app_main(&adapted);
-        if (cli.same(group, "thread")) result = @import("checks/thread/main.zig").r4_app_main(&adapted);
+        if (cli.same(group, "thread")) {
+            var options = cli.Tokens{ .input = args };
+            var kernel_selected = false;
+            while (options.next() catch return 2) |token| {
+                if (std.ascii.startsWithIgnoreCase(token, "/KERNEL")) kernel_selected = true;
+            }
+            if (kernel_selected) result = @import("checks/thread/kernel.zig").run(&adapted, args, out)
+            else result = @import("checks/thread/main.zig").r4_app_main(&adapted);
+        }
         if (cli.same(group, "stack")) result = @import("checks/stack/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "simd")) result = @import("checks/simd/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "lifecycle")) result = @import("checks/lifecycle/main.zig").r4_app_main(&adapted);

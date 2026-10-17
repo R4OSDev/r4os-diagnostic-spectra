@@ -9,6 +9,8 @@ SPECTRA METRICS LOCKS /WATCH:3 /INTERVAL:1000
 SPECTRA LOGS BOOT
 SPECTRA LOGS SERVICE /JSON
 SPECTRA CHECK THREAD
+SPECTRA CHECK THREAD /KERNEL
+SPECTRA CHECK THREAD /KERNEL:SYNC
 SPECTRA CHECK THREAD /PROCESSEXIT
 SPECTRA CHECK PERFORMANCE
 SPECTRA BENCH CLOCK /REPEAT:3 /WARM
@@ -63,3 +65,10 @@ the terminal kernel path; the existing reservations stay unchanged.
 Since 0.1.6, `CHECK ASYNC_IO /LENGTHS` probes signed-result limits through
 real ABI calls with small buffers. It checks rejection before admission,
 unchanged files/live streams and the existing 64-bit range-read offset.
+
+`CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION]` explicitly runs shared native
+contracts on an owned BSP controller. Exact task generations and actual
+work-release receipts prove cleanup. ADMISSION checks two concurrent own
+callers and a real join. Global timer/reserve injections remain isolated boot
+cases; the structured result advertises them and unavailable hardware.
+Use the same `/JSON` and explicit `/EXPORT:` presentation as other checks.
