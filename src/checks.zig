@@ -127,7 +127,19 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
         if (cli.same(group, "simd")) result = @import("checks/simd/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "lifecycle")) result = @import("checks/lifecycle/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "async_io")) result = @import("checks/async_io/main.zig").r4_app_main(&adapted);
-        if (cli.same(group, "memory")) result = @import("checks/memory/main.zig").r4_app_main(&adapted);
+        if (cli.same(group, "memory")) {
+            var options = cli.Tokens{ .input = args };
+            var heap_selected = false;
+            while (options.next() catch return 2) |token| {
+                if (cli.same(token, "/KERNELHEAP")) heap_selected = true;
+            }
+            if (heap_selected) {
+                if (!cli.same(args, "/KERNELHEAP")) {
+                    out.unavailable("memory", "/KERNELHEAP takes no check options");
+                    result = 2;
+                } else result = @import("checks/memory/kernel_heap.zig").run(&adapted, out);
+            } else result = @import("checks/memory/main.zig").r4_app_main(&adapted);
+        }
         if (cli.same(group, "filesystem")) result = @import("checks/filesystem/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "ntfs")) result = @import("checks/ntfs/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "loader")) result = @import("checks/loader/main.zig").r4_app_main(&adapted);

@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .r4os_sdk = .{
-            .url = "https://github.com/R4OSDev/r4os-sdk/archive/7ca65106f8f5c7958a2acbdc5ada3ce84a38ea22.tar.gz",
-            .hash = "r4os_sdk-0.64.23-NnPzAj7_EgH60pe400DlhhK2qyY-4JL9LcxUvLN730jk",
+            .url = "https://github.com/R4OSDev/r4os-sdk/archive/647bfe4d8104e49ad65c2fe994e0f55d46ae494a.tar.gz",
+            .hash = "r4os_sdk-0.64.24-NnPzAicFEwGn_C-rQy0Eb5XolrANEX4iGHOloDo1iowg",
         },
         .r4os_libraries = .{
             .url = "https://github.com/R4OSDev/r4os-libraries/archive/506155df353addba5dd164713175f8ab875b0f91.tar.gz",
@@ -25,6 +25,7 @@
         "Fixtures",
         "Provenance",
         "module.R4MF",
+        "Version.zig",
         "PROVENANCE.txt",
     },
 }
