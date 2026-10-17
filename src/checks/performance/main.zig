@@ -45,6 +45,14 @@ const kernel_ipc_proxy_services = [_][:0]const u8{
     "TCPSVC",
 };
 
+// Exact passive values captured before this conformance workload. Earlier
+// untrusted/raw I/O legitimately uses bounce buffers and keeps its counters.
+const StorageBounceBaseline = struct {
+    allocations: u64,
+    bytes: u64,
+    copy_bytes: u64,
+};
+
 const CheckResult = struct {
     label: []const u8 = &.{},
     ok: bool = false,
@@ -550,7 +558,11 @@ const App = struct {
                 self.printCheck("Passive performance snapshot", true);
             },
             .conformance => {
-                ok = self.runConformance(&post_summary);
+                ok = self.runConformance(&post_summary, .{
+                    .allocations = passive_summary.storage_bounce_allocations,
+                    .bytes = passive_summary.storage_bounce_bytes,
+                    .copy_bytes = passive_summary.storage_bounce_copy_bytes,
+                });
                 has_post_summary = true;
             },
             .benchmark => {
@@ -622,7 +634,7 @@ const App = struct {
         return if (ok) 0 else 1;
     }
 
-    fn runConformance(self: *App, out_summary: *r4os.abi.ProgramPerformanceSummary) bool {
+    fn runConformance(self: *App, out_summary: *r4os.abi.ProgramPerformanceSummary, bounce_baseline: StorageBounceBaseline) bool {
         var ok = true;
         ok = self.testApiHeader() and ok;
         ok = self.testPciInventorySnapshot() and ok;
@@ -651,7 +663,7 @@ const App = struct {
             return false;
         };
         out_summary.* = summary;
-        ok = self.testSummary(summary) and ok;
+        ok = self.testSummary(summary, bounce_baseline) and ok;
         ok = self.testSummaryClock(summary) and ok;
         ok = self.testPreemption(summary) and ok;
         ok = self.testSchedulerLatency(summary) and ok;
@@ -1886,7 +1898,7 @@ const App = struct {
         return true;
     }
 
-    fn testSummary(self: *App, summary: r4os.abi.ProgramPerformanceSummary) bool {
+    fn testSummary(self: *App, summary: r4os.abi.ProgramPerformanceSummary, bounce_baseline: StorageBounceBaseline) bool {
         const flags_ok =
             (summary.flags & r4os.abi.performance_flag_scheduler_ready) != 0 and
             (summary.flags & r4os.abi.performance_flag_boot_perf_ready) != 0 and
@@ -2106,9 +2118,9 @@ const App = struct {
             summary.storage_worker_start_failures == 0 and
             summary.storage_direct_requests > 0 and
             summary.storage_direct_bytes > 0 and
-            summary.storage_bounce_allocations == 0 and
-            summary.storage_bounce_bytes == 0 and
-            summary.storage_bounce_copy_bytes == 0 and
+            summary.storage_bounce_allocations == bounce_baseline.allocations and
+            summary.storage_bounce_bytes == bounce_baseline.bytes and
+            summary.storage_bounce_copy_bytes == bounce_baseline.copy_bytes and
             summary.storage_direct_timeout_waits == 0 and
             summary.fs_cache_bulk_write_requests <= summary.fs_cache_bulk_write_sectors / 2 and
             summary.fs_cache_selective_flushes <= summary.fs_cache_flushes and
@@ -2145,7 +2157,7 @@ const App = struct {
             summary.fs_cache_fill_run_sectors >= summary.fs_cache_fill_run_pages and
             summary.fs_cache_fill_run_bytes == summary.fs_cache_fill_run_sectors * 512 and
             summary.fs_cache_fill_run_failures <= summary.fs_cache_fill_run_requests and
-            summary.fs_cache_fill_run_max_pages <= 2 and
+            summary.fs_cache_fill_run_max_pages <= 16 and
             summary.fs_cache_fill_scatter_copy_bytes <= summary.fs_cache_fill_run_bytes and
             summary.fs_cache_read_staging_copy_bytes == summary.fs_cache_read_caller_copy_bytes and
             summary.fs_cache_fill_lock_drops == summary.fs_cache_fill_run_requests and

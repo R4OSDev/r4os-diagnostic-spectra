@@ -1122,13 +1122,16 @@ fn checkLargeStreaming(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Co
     const checksum_ok = read_checksum != null and read_checksum.? == expected_checksum;
 
     // Preserve the FAT32 stream-integrity probe, then evict old clean pages
-    // and read a known large NTFS module in 8-KB ranges. FAT32's 512-byte
+    // and read a known large NTFS module in resident64-KB ranges. FAT32's 512-byte
     // test-image clusters necessarily reach the cache one sector at a time;
     // the NTFS range path preserves one contiguous multi-sector request and
     // therefore exercises the production multi-page fill contract directly.
+    const allocator = ctx.allocator();
+    const fill_buffer = allocator.alloc(u8, 64 * 1024) catch return false;
+    defer allocator.free(fill_buffer);
     const cold_reclaim = reclaimPageCacheToPolicyFloor(dev);
     const before_readback = dev.performanceSummary();
-    const probe_checksum = checksumFile(ctx, pagecache_multifill_probe_path, pagecache_multifill_probe_bytes, read_chunk[0..]);
+    const probe_checksum = checksumFile(ctx, pagecache_multifill_probe_path, pagecache_multifill_probe_bytes, fill_buffer);
     const multifill_probe_ok = probe_checksum != null;
     const after_large = dev.performanceSummary();
 
@@ -1172,7 +1175,7 @@ fn checkLargeStreaming(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Co
                 fill_sectors_delta >= fill_pages_delta and
                 fill_bytes_delta == fill_sectors_delta * 512 and
                 fill_failures_delta == 0 and
-                fill_max_pages == 2 and
+                fill_max_pages >= 2 and fill_max_pages <= 16 and
                 fill_scatter_bytes_delta > 0 and
                 fill_scatter_bytes_delta <= fill_bytes_delta and
                 fill_locks_delta == fill_run_requests_delta and
