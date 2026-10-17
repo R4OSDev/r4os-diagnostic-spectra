@@ -2,6 +2,7 @@
 const std = @import("std");
 const r4os = @import("r4os");
 const abi = r4os.abi;
+const mounts = @import("fixture_mount.zig");
 const file_bytes = 1024 * 1024 + 37;
 const read_bytes = 512 * 1024 + 37;
 const rounds = 32;
@@ -54,40 +55,6 @@ fn worker(raw: u64) callconv(.c) i32 {
     }
     return 0;
 }
-fn mounted(sys: *const r4os.r4sys.Context, letter: u8) ?abi.StorageVolumeInfo {
-    const storage = r4os.storage.Context{ .sys = sys };
-    var inventory: abi.StorageInventory = .{};
-    if (storage.inventory(&inventory) != 0) return null;
-    var slot: u32 = 0;
-    while (slot < inventory.volume_slots) : (slot += 1) {
-        var volume: abi.StorageVolumeInfo = .{};
-        if (storage.volume(inventory.generation, slot, &volume) == abi.storage_result_present and volume.letter == letter) return volume;
-    }
-    return null;
-}
-fn refreshedTarget(sys: *const r4os.r4sys.Context, old: abi.StorageTarget) !abi.StorageTarget {
-    const storage = r4os.storage.Context{ .sys = sys };
-    var inventory: abi.StorageInventory = .{};
-    if (storage.inventory(&inventory) != 0) return error.TargetInventory;
-    var device: abi.StorageDeviceInfo = .{};
-    if (storage.device(inventory.generation, old.device.slot, &device) != abi.storage_result_present or
-        !std.meta.eql(device.reference, old.device)) return error.TargetDeviceChanged;
-    var slot: u32 = 0;
-    while (slot < device.partition_slots) : (slot += 1) {
-        var part: abi.StoragePartitionInfo = .{};
-        const result = storage.partition(inventory.generation, &device.reference, slot, &part);
-        if (result == 0) continue;
-        if (result != abi.storage_result_present) return error.TargetPartition;
-        if (part.target.partition_number != old.partition_number) continue;
-        var expected = old;
-        expected.layout_generation = part.target.layout_generation;
-        if (!std.meta.eql(expected, part.target) or old.layout_generation == part.target.layout_generation) return error.TargetSelectionChanged;
-        var after: abi.StorageInventory = .{};
-        if (storage.inventory(&after) != 0 or after.generation != inventory.generation) return error.TargetInventoryChanged;
-        return part.target;
-    }
-    return error.TargetMissing;
-}
 fn phase(sys: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context, letter: u8) !void {
     var paths: [5][64]u8 = undefined;
     const marker_path = try std.fmt.bufPrintZ(&paths[0], "{c}:\\TEMP\\READERS.R4S", .{letter});
@@ -97,7 +64,7 @@ fn phase(sys: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context, letter:
     const renamed_path = try std.fmt.bufPrintZ(&paths[4], "{c}:\\TEMP\\READW2.BIN", .{letter});
     var mark: [64]u8 = undefined;
     if (sys.fileRead(marker_path.ptr, &mark) != marker.len or !std.mem.eql(u8, mark[0..marker.len], marker)) return error.PrivateFixtureRequired;
-    const volume = mounted(sys, letter) orelse return error.MissingMount;
+    const volume = mounts.mounted(sys, letter) orelse return error.MissingMount;
     if (volume.filesystem != (if (letter == 'C') abi.storage_filesystem_ntfs else abi.storage_filesystem_fat32)) return error.WrongFilesystem;
     for ([_][*:0]const u8{ a_path.ptr, b_path.ptr }) |path| {
         const info = sys.fileInfo(path) orelse return error.MissingFile;
@@ -205,7 +172,7 @@ fn phase(sys: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context, letter:
     if (letter != 'C') {
         if (storage.useEnd(&lease) != 0) return error.MountUseRelease;
         if (storage.unmount(&volume.reference) != 0) return error.Unmount;
-        const target = try refreshedTarget(sys, volume.target);
+        const target = try mounts.refreshedTarget(sys, volume.target);
         var rejected: abi.StorageVolumeRef = .{};
         if (storage.mount(&volume.target, letter, &rejected) != abi.storage_error_stale or rejected.generation != 0) return error.StaleTargetAccepted;
         var fresh: abi.StorageVolumeRef = .{};
@@ -218,7 +185,7 @@ fn phase(sys: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context, letter:
         }
         mount_ok = (fresh.slot != volume.reference.slot or fresh.generation != volume.reference.generation) and
             storage.unmount(&volume.reference) == abi.storage_error_stale;
-        const current = mounted(sys, letter) orelse return error.RemountMissing;
+        const current = mounts.mounted(sys, letter) orelse return error.RemountMissing;
         mount_ok = current.reference.slot == fresh.slot and current.reference.generation == fresh.generation and mount_ok;
         // Probe the restored mount through its newly bound ordinary read path.
         mount_ok = sys.fileReadAt(a_path.ptr, 127, a[0..1031]) == 1031 and valid(a[0..1031], 127, 23) and mount_ok;
@@ -246,7 +213,7 @@ pub fn run(sys: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context) bool 
     var fat: u8 = 0;
     for ('D'..'Z' + 1) |candidate| {
         const letter: u8 = @intCast(candidate);
-        const volume = mounted(sys, letter) orelse continue;
+        const volume = mounts.mounted(sys, letter) orelse continue;
         if (volume.filesystem != abi.storage_filesystem_fat32) continue;
         var text: [64]u8 = undefined;
         const path = std.fmt.bufPrintZ(&text, "{c}:\\TEMP\\READERS.R4S", .{letter}) catch return false;
