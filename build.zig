@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) void {
     const libraries_dep = b.dependencyFromBuildZig(libraries_build, .{});
     const sdk = sdk_build.sdk(b, sdk_dep, .{});
     _ = sdk.addR4MFWithOptions(b.path("module.R4MF"), .{
-        .zig_module_roots = &.{libraries_dep.namedLazyPath("r4std_zig_binding")},
+        .zig_module_roots = &.{ libraries_dep.namedLazyPath("r4std_zig_binding"), b.path("Version.zig") },
     });
     _ = sdk.addR4MFWithOptions(b.path("Fixtures/StandardChild/module.R4MF"), .{});
     @import("Fixtures/Loader/build.zig").add(b, sdk_build.build_api, sdk.builder, sdk_dep);
