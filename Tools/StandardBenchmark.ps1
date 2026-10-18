@@ -2,8 +2,8 @@
 $script:SpectraAreas=@('scheduler_sync','memory','ipc','lifecycle','filesystem_io')
 $script:SpectraOperations=@('16384','512','16384','32','8')
 $script:SpectraBytes=@('0','67108864','393216','0','1048576')
-$script:SpectraWorkloads=[ordered]@{scheduler_sync='notification-ready-roundtrip-16384-v2';memory='demand-vm-512x128k-v2';ipc='kernel-dns-status-16384-v2';lifecycle='owned-fixture-32-v2';filesystem_io='ntfs-stream-8x64k-v1'}
-$script:SpectraSuite='spectra-standard-2'
+$script:SpectraWorkloads=[ordered]@{scheduler_sync='allcpu-notification-ready-roundtrip-16384-v3';memory='allcpu-demand-vm-512x128k-v3';ipc='allcpu-kernel-dns-status-16384-v3';lifecycle='allcpu-owned-fixture-32-v3';filesystem_io='allcpu-ntfs-stream-8x64k-v3'}
+$script:SpectraSuite='spectra-standard-3'
 $script:SpectraScoring='spectra-geomean-1'
 $script:SpectraInvariant=[Globalization.CultureInfo]::InvariantCulture
 function Get-SpectraReferenceFingerprint($Run) {
@@ -74,12 +74,25 @@ function Get-SpectraQuantity([uint64]$Elapsed,[uint64]$Operations) {
 }
 function Get-SpectraMetricUsable($Metric) {
  try {
-  if($Metric.status -cne 'ok' -or !$Metric.primary -or $Metric.metric_version -cne '1' -or $Metric.unit -cne 'ns/operation' -or
+  if($Metric.status -cne 'ok' -or !$Metric.primary -or $Metric.metric_version -cnotin @('1','2') -or $Metric.unit -cne 'ns/operation' -or
      $Metric.direction -cne 'lower_is_better' -or (Get-SpectraDecimal $Metric.weight) -ne 1 -or
      (Get-SpectraU64 $Metric.sample_count) -ne 5 -or (Get-SpectraDecimal $Metric.median_value) -le 0){return $false}
   foreach($name in @('work_complete','clock_valid','cleanup_confirmed')){if($Metric.checks[$name] -isnot [bool] -or !$Metric.checks[$name]){return $false}}
   return $true
  }catch{return $false}
+}
+# Suite 3 measures aggregate throughput with one equal-work participant per
+# available CPU. Hardware, CPU count, RAM and native/VM execution are measured
+# variables; only the workload/measurement protocol forms the comparison key.
+function Get-SpectraMethod($Environment) {
+ $fields=@('cpu_policy','measurement','filesystem','workloads','cache_state','warmup_runs','warmup_min_ns','warmup_min_batches','repetitions','settle_ms')
+ $method=[ordered]@{suite_version=$script:SpectraSuite;scoring_version=$script:SpectraScoring;metric_version='2'}
+ foreach($key in $fields){
+  if($null -eq $Environment[$key]){throw ('Incomplete Suite-3 method: '+$key)}
+  $method[$key]=$Environment[$key]
+ }
+ if($method.cpu_policy -cne 'all-available-v1' -or $method.measurement -cne 'parallel-wall-ns-per-operation-v3' -or $method.filesystem -cne 'ntfs'){throw 'Unexpected Suite-3 CPU/measurement/filesystem policy.'}
+ return $method
 }
 function Get-SpectraComparisonReason($Run,$Reference) {
  try {
@@ -88,14 +101,11 @@ function Get-SpectraComparisonReason($Run,$Reference) {
  foreach($key in @('suite_version','scoring_version','comparison_key','instrumentation_mode')){
   if(!$Run[$key] -or $Run[$key] -cne $Reference[$key]){return 'incompatible-'+$key}
  }
- foreach($key in @('execution','vcpus','ram_bytes','qemu','storage','workloads','cache_state','warmup_runs','warmup_min_ns','warmup_min_batches','repetitions')){
-  if($null -eq $Run.environment[$key] -or $null -eq $Reference.environment[$key] -or
-     (Get-SpectraCanonical $Run.environment[$key]) -cne (Get-SpectraCanonical $Reference.environment[$key])){return 'incompatible-environment-'+$key}
- }
+ if((Get-SpectraCanonical (Get-SpectraMethod $Run.environment)) -cne (Get-SpectraCanonical (Get-SpectraMethod $Reference.environment))){return 'incompatible-workload-method'}
  if(@($Reference.metrics).Count -ne 5){return 'reference-metrics-incomplete'}
  foreach($area in $script:SpectraAreas){
   $found=@($Reference.metrics|Where-Object {$_.area_id -ceq $area -and $_.metric_id -ceq 'elapsed_ns_per_operation'})
-  if($found.Count -ne 1 -or !(Get-SpectraMetricUsable $found[0])){return 'reference-metric-invalid-'+$area}
+  if($found.Count -ne 1 -or $found[0].metric_version -cne '2' -or !(Get-SpectraMetricUsable $found[0])){return 'reference-metric-invalid-'+$area}
  }
  return $null
  }catch{return 'reference-invalid-or-incomplete'}
@@ -141,8 +151,11 @@ function ConvertTo-SpectraRun([string]$GuestRecords,$Context) {
  $header=$headers[0];$result=$results[0]
  if($header.suite_version -cne $script:SpectraSuite -or $header.scoring_version -cne $script:SpectraScoring -or
     $header.warmup_runs -cne '1' -or $header.warmup_min_ns -cne '1000000000' -or $header.warmup_min_batches -cne '3' -or
-    $header.cache_state -cne 'active-per-area-1s-3batches-v2' -or $header.repetitions -cne '5' -or $header.vcpus -cne '4' -or $header.settle_ms -cne '200' -or
+    $header.cache_state -cne 'parallel-active-per-area-1s-3batches-v3' -or $header.repetitions -cne '5' -or $header.cpu_policy -cne 'all-available-v1' -or $header.settle_ms -cne '200' -or
     (Get-SpectraCanonical $header.workloads) -cne (Get-SpectraCanonical $script:SpectraWorkloads)){throw 'Guest workload differs from the fixed standard profile.'}
+ $workers=Get-SpectraU64 $header.vcpus
+ if($workers -eq 0 -or $header.worker_count -cne $header.vcpus -or $Context.environment.vcpus -cne $header.vcpus -or $Context.environment.cpu_policy -cne $header.cpu_policy){throw 'Host and guest disagree on complete available CPU participation.'}
+ $null=Get-SpectraMethod $Context.environment
  foreach($key in @('cache_state','warmup_runs','warmup_min_ns','warmup_min_batches','repetitions')){
   if($Context.environment[$key] -cne $header[$key]){throw ('Host and guest disagree on '+$key)}
  }
@@ -157,7 +170,7 @@ function ConvertTo-SpectraRun([string]$GuestRecords,$Context) {
  if($result.status -notin @('completed','failed','cancelled','incomplete') -or
     ($result.status -ceq 'completed' -and $result.exit_code -cne '0') -or
     ($result.status -cin @('failed','cancelled') -and $result.exit_code -ceq '0')){throw 'Invalid terminal guest status.'}
- $run.notes='Suite 2: active warmup accumulates at least one second and three fixed batches per area; five fixed longer measurement batches. Scheduler peer readiness precedes timing. All warmup work retained. No speed budget.'
+ $run.notes='Suite 3: active warmup accumulates at least one second and three fixed batches per area; five fixed longer measurement batches. Scheduler peer readiness precedes timing. All available CPUs participate with equal per-CPU work; wall time is divided by total completed operations. All warmup work retained. No speed budget.'
  $run.baseline_run_id=$null;$run.metrics=@();$run.samples=@();$run.scores=@()
  $metricRecords=@($records|Where-Object {$_.kind -ceq 'metric'});$sampleRecords=@($records|Where-Object {$_.kind -ceq 'sample'})
  if($metricRecords.Count -ne 5 -or $sampleRecords.Count -ne 30 -or @($records|Where-Object {$_.kind -ceq 'score'}).Count -ne 6 -or $records.Count -ne 43){throw 'Missing, duplicate or unknown guest records.'}
@@ -165,7 +178,7 @@ function ConvertTo-SpectraRun([string]$GuestRecords,$Context) {
   $area=$script:SpectraAreas[$i];$found=@($metricRecords|Where-Object {$_.area_id -ceq $area})
   if($found.Count -ne 1){throw 'Missing/duplicate area metric.'}
   $metric=$found[0].Clone();$metric.Remove('schema');$metric.Remove('schema_version');$metric.Remove('kind')
-  if($metric.metric_id -cne 'elapsed_ns_per_operation' -or $metric.metric_version -cne '1' -or $metric.unit -cne 'ns/operation' -or $metric.direction -cne 'lower_is_better' -or $metric.primary -isnot [bool] -or !$metric.primary -or $metric.weight -cne '1'){throw 'Invalid primary metric contract.'}
+  if($metric.metric_id -cne 'elapsed_ns_per_operation' -or $metric.metric_version -cne '2' -or $metric.unit -cne 'ns/operation' -or $metric.direction -cne 'lower_is_better' -or $metric.primary -isnot [bool] -or !$metric.primary -or $metric.weight -cne '1'){throw 'Invalid primary metric contract.'}
   $measured=[Collections.Generic.List[uint64]]::new();$allOk=$true
   foreach($phase in @('warmup','measurement')){
    $count=if($phase -ceq 'warmup'){1}else{5}
@@ -173,16 +186,16 @@ function ConvertTo-SpectraRun([string]$GuestRecords,$Context) {
     $selected=@($sampleRecords|Where-Object {$_.area_id -ceq $area -and $_.phase -ceq $phase -and $_.sample_index -ceq [string]$index})
     if($selected.Count -ne 1){throw 'Missing/duplicate raw sample identity.'}
     $sample=$selected[0].Clone();foreach($key in @('schema','schema_version','kind')){$sample.Remove($key)}
-    foreach($key in @('sample_index','elapsed_ns','operation_count','bytes_processed','clock_generation','clock_resolution_ns','observer_overhead_ns')){$null=Get-SpectraU64 $sample[$key] -Nullable}
+    foreach($key in @('sample_index','elapsed_ns','operation_count','bytes_processed','clock_generation','clock_resolution_ns','observer_overhead_ns','worker_count','completed_workers')){$null=Get-SpectraU64 $sample[$key] -Nullable}
     if($sample.metric_id -cne $metric.metric_id -or $sample.status -notin @('ok','failed','skipped','incomplete')){throw 'Invalid sample status/metric.'}
     if($sample.status -ceq 'ok'){
      $elapsed=Get-SpectraU64 $sample.elapsed_ns;$operations=Get-SpectraU64 $sample.operation_count;$resolution=Get-SpectraU64 $sample.clock_resolution_ns
-     $batchOperations=[uint64]$script:SpectraOperations[$i];$batchBytes=[uint64]$script:SpectraBytes[$i]
+     $batchOperations=[uint64]$script:SpectraOperations[$i]*$workers;$batchBytes=[uint64]$script:SpectraBytes[$i]*$workers
      $workValid=if($phase -ceq 'warmup'){
       $operations -ge 3*$batchOperations -and $operations % $batchOperations -eq 0 -and $elapsed -ge 1000000000 -and
       [decimal]$sample.bytes_processed -eq [decimal]$batchBytes*([decimal]$operations/[decimal]$batchOperations)
-     }else{$sample.operation_count -ceq $script:SpectraOperations[$i] -and $sample.bytes_processed -ceq $script:SpectraBytes[$i]}
-     if(!$workValid -or
+     }else{[uint64]$sample.operation_count -eq $batchOperations -and [uint64]$sample.bytes_processed -eq $batchBytes}
+     if(!$workValid -or $sample.worker_count -cne $header.vcpus -or $sample.completed_workers -cne $header.vcpus -or
         $elapsed -eq 0 -or $resolution -eq 0 -or [decimal]$elapsed -lt [decimal]$resolution*10 -or $sample.clock_source -notin @('TSC','HPET') -or !(Get-SpectraU64 $sample.clock_generation) -or
         $sample.value -cne (Get-SpectraQuantity $elapsed $operations) -or $null -ne $sample.failure_reason){throw 'Successful sample does not prove its complete work/clock/value.'}
      if($phase -ceq 'measurement'){$measured.Add($elapsed)}
@@ -195,7 +208,7 @@ function ConvertTo-SpectraRun([string]$GuestRecords,$Context) {
    $sorted=@($measured.ToArray()|Sort-Object);[uint64]$median=$sorted[2]
    $deviations=@(foreach($v in $sorted){if($v -ge $median){$v-$median}else{$median-$v}})|Sort-Object
    $expected=@{median_value=$median;min_value=$sorted[0];max_value=$sorted[4];mad_value=$deviations[2]}
-   foreach($key in $expected.Keys){if($metric[$key] -cne (Get-SpectraQuantity $expected[$key] ([uint64]$script:SpectraOperations[$i]))){throw 'Guest metric does not match retained raw samples.'}}
+   foreach($key in $expected.Keys){if($metric[$key] -cne (Get-SpectraQuantity $expected[$key] ([uint64]$script:SpectraOperations[$i]*$workers))){throw 'Guest metric does not match retained raw samples.'}}
   }elseif($run.status -ceq 'completed'){throw 'Completed run lacks an area.'}
   $run.metrics+=,$metric
  }

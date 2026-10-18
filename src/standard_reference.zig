@@ -86,7 +86,8 @@ pub fn readReference(root: Value, config: Config, detail: bool) Reference {
         } else if (!std.ascii.isHex(ch)) return result;
     }
     const env = field(root, "environment") orelse return result;
-    if ((decimal(field(env, "vcpus") orelse return result) orelse return result) != 4 or
+    if ((decimal(field(env, "vcpus") orelse return result) orelse return result) < 1 or
+        !isText(env, "cpu_policy", model.cpu_policy) or
         (decimal(field(env, "warmup_runs") orelse return result) orelse return result) != 1 or
         (decimal(field(env, "warmup_min_ns") orelse return result) orelse return result) != model.warmup_min_ns or
         (decimal(field(env, "warmup_min_batches") orelse return result) orelse return result) != model.warmup_min_batches or
@@ -102,7 +103,7 @@ pub fn readReference(root: Value, config: Config, detail: bool) Reference {
             found = i;
         };
         const index = found orelse return result;
-        if (result.values[index] != null or !isText(metric, "metric_id", model.metric_id) or !isText(metric, "metric_version", "1") or
+        if (result.values[index] != null or !isText(metric, "metric_id", model.metric_id) or !isText(metric, "metric_version", model.metric_version) or
             !isText(metric, "status", "ok") or !isText(metric, "unit", "ns/operation") or !isText(metric, "direction", "lower_is_better") or
             (decimal(field(metric, "weight") orelse return result) orelse return result) != 1 or
             (decimal(field(metric, "sample_count") orelse return result) orelse return result) != 5) return result;

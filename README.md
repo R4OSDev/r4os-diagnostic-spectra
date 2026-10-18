@@ -25,20 +25,28 @@ An independent checkout can also use `zig build` with the R4OS Zig toolchain; `b
 The module consolidates former R4OS kernel diagnostics. Source identities and required notices are retained in `Provenance/`; loader fixtures live in `Fixtures/Loader/`. See `DOCUMENTATION.de.txt` for data formats, limits and the migration boundary.
 
 The required R4OS performance benchmark is `SPECTRA BENCH STANDARD`, suite
-`spectra-standard-2` (Spectra 0.1.2). Each of the five areas actively warms up
+`spectra-standard-3` (Spectra 0.1.24). Each available CPU performs an equal
+share of every workload behind a common start barrier. The metric is shared
+wall time per total completed operation; all successful samples prove complete
+participation. Each of the five areas actively warms up
 for at least one second and three complete batches before five fixed, longer
 measurements. The scheduler peer acknowledges readiness before timing starts.
 All warmup work and measured samples are retained, with five equally weighted
 scores plus overall. `/AREA:memory` selects a component; `/BASELINE` explicitly
 defines a self-reference. `Tools/Export-StandardBenchmark.ps1` validates the
 guest records and supplies the standalone Schema-1 host export/reference
-comparison. `Baselines/standard-2.reference.json` pins the reference UUID and
+comparison. `Baselines/standard-3.reference.json` pins the reference UUID and
 scoring/export hashes; the full run stays in DevCenter or local workspace
 artifacts. The runner resolves the verified local cache or downloads from
 `R4OS_DEVCENTER_API_URL` / `Tools/BenchmarkHost.R4S` (`DEVCENTER_API_URL`).
-Real run exports never belong in Git. `standard-1.reference.json` pins the
-unchanged historical Suite-1 reference. Scores from
-the two suites are not comparable. The package also owns the small
+Real run exports never belong in Git. `standard-1.reference.json` and
+`standard-2.reference.json` retain the unchanged historical references. Scores
+from different suites are not comparable. Suite 3 compares the same workload
+protocol across CPU counts and hardware while preserving the actual native/VM,
+RAM, storage and boot context. Parallel demand-VM work requires Kernel 0.1.330
+or later. Kernel 0.1.331 also expands the shared stream pool so sixteen or
+more filesystem participants can coexist with their export stream. The fixed
+SMP4 reference remains unchanged. The package also owns the small
 `Fixtures/StandardChild` lifecycle fixture.
 
 `Build.sh test` includes Zig and PS7 result-contract checks. Workload details,

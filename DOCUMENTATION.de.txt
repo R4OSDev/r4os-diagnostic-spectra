@@ -115,7 +115,7 @@ SYSINFO bleibt die allgemeine Systemidentitaets-/Hardwareuebersicht.
 SSHD behaelt R4DIAG PING als reine Transportantwort; R4DIAG TASKS entfaellt.
 Die GUI, weitere Fachbereiche, Gesamtrefactor und das externe Datenbanktool
 werden hier nicht implementiert. Verbindlicher Performancebenchmark ist
-SPECTRA BENCH STANDARD mit Suite 2; Messablauf und DevCenter-Import:
+SPECTRA BENCH STANDARD mit Suite 3; Messablauf und DevCenter-Import:
 Agents/Benchmark.txt.
 
 CHECK STORAGE prueft generische Kernelqueues, Cache, Reclaim und Pagerpfade.
@@ -162,19 +162,24 @@ Fehlern gemeldet. Keine Historie; Ueberschreiben und Neustart verwerfen den
 alten Datensatz. R4X-Image/Tag bezeichnen die laufende Instanz, keinen
 bewiesenen Treiber-/Library-RIP-Besitzer. R4DEV v14 ist dafuer erforderlich.
 
-Standardbenchmark Suite 2
+Standardbenchmark Suite 3
 ------------------------
 SPECTRA BENCH STANDARD liefert Scheduler/Synchronisation, Speicher, Kernel-IPC,
 Programmlebenszyklus und Datei/I/O getrennt sowie einen gleich gewichteten
-Gesamtindex. Seit 0.1.2 gilt spectra-standard-2: je Bereich mindestens eine
+Gesamtindex. Seit 0.1.24 gilt spectra-standard-3: je Bereich mindestens eine
 Sekunde aktive Arbeit und drei volle Batches vor fuenf festen Messungen.
 Die ganze Aufwaermarbeit bleibt in einem Rohsample mit echten Gesamtmengen.
-Scheduler-Ready liegt vor Timerstart; Messbatches umfassen 16384 Roundtrips,
+Je verfuegbarer CPU arbeitet ein eigener Teilnehmer hinter derselben
+Startbarriere. Parallele Demand-VM-Last verlangt den TLB-Wartepfad aus
+Kernel0.1.330. Gesamtzeit/alle abgeschlossenen Operationen misst den echten
+parallelen Durchsatz (metric_version=2), ohne kuenstlichen CPU-Multiplikator.
+Jeder erfolgreiche Rohsample weist alle N abgeschlossenen Worker nach.
+Scheduler-Ready liegt vor Timerstart; Messbatches je CPU umfassen 16384 Roundtrips,
 512 VM-Zyklen, 16384 IPC-Anfragen, 32 Kindstarts oder acht Dateizyklen.
-Suite 2 verwendet den Deskriptor standard-2.reference.json; der echte
+Suite 3 verwendet den Deskriptor standard-3.reference.json; der echte
 Referenzlauf liegt im DevCenter oder lokalen Artefaktcache. Keine echten
-Laufexporte/Rohsamples im Repository. standard-1.reference.json bleibt historisch
-und unveraendert. /AREA:<ID> waehlt einen
+Laufexporte/Rohsamples im Repository. standard-1.reference.json und standard-2.reference.json bleiben historisch
+und unveraendert. Suite-uebergreifende Vergleiche sind ungueltig. /AREA:<ID> waehlt einen
 Bereich, /BASELINE einen ausdruecklichen Eigenbezug; /REFERENCE:<Hostexport>
 und /COMPAREKEY:<Methodenhash> einen geprueften Vergleich. Ohne Referenz oder
 bei inkompatibler Methode bleiben Scores null mit Grund. STDCHILD.R4X ist die

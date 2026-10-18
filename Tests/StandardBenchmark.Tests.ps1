@@ -3,18 +3,18 @@ $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot '../Tools/StandardBenchmark.ps1')
 function Assert-True([bool]$Condition,[string]$Message){if(!$Condition){throw $Message}}
 function Copy-Value($Value){return ($Value|ConvertTo-Json -Depth 32|ConvertFrom-Json -AsHashtable)}
-$environment=@{execution='qemu';vcpus='4';ram_bytes='1073741824';qemu=@{version='fixture-1';backend='kvm'};storage=@{controller='fixture'};workloads=$script:SpectraWorkloads;cache_state='active-per-area-1s-3batches-v2';warmup_runs='1';warmup_min_ns='1000000000';warmup_min_batches='3';repetitions='5';cpu=@{model='first'};host=@{label='first'}}
+$environment=@{execution='qemu';vcpus='4';cpu_policy='all-available-v1';measurement='parallel-wall-ns-per-operation-v3';filesystem='ntfs';settle_ms='200';ram_bytes='1073741824';qemu=@{version='fixture-1';backend='kvm'};storage=@{controller='fixture'};workloads=$script:SpectraWorkloads;cache_state='parallel-active-per-area-1s-3batches-v3';warmup_runs='1';warmup_min_ns='1000000000';warmup_min_batches='3';repetitions='5';cpu=@{model='first'};host=@{label='first'}}
 $context=@{run_id='83030000-0000-4000-8000-000000000001';host_id='offline-fixture';started_at_utc='2026-10-13T00:00:00Z';finished_at_utc='2026-10-13T00:00:01Z';release_version='fixture';kernel_version='fixture';environment_id='fixture';comparison_key='fixture-method';environment=$environment;artifacts=@(@{component='kernel';build_options=@{metrics=$null}})}
 $records=[Collections.Generic.List[object]]::new()
-$records.Add(@{schema='r4os.spectra.standard';schema_version=1;kind='header';suite_version=$script:SpectraSuite;scoring_version=$script:SpectraScoring;spectra_version='fixture';instrumentation_mode='base';cache_state='active-per-area-1s-3batches-v2';warmup_runs='1';warmup_min_ns='1000000000';warmup_min_batches='3';repetitions='5';vcpus='4';settle_ms='200';workloads=$script:SpectraWorkloads})
+$records.Add(@{schema='r4os.spectra.standard';schema_version=1;kind='header';suite_version=$script:SpectraSuite;scoring_version=$script:SpectraScoring;spectra_version='fixture';instrumentation_mode='base';cache_state='parallel-active-per-area-1s-3batches-v3';warmup_runs='1';warmup_min_ns='1000000000';warmup_min_batches='3';repetitions='5';vcpus='4';worker_count='4';cpu_policy='all-available-v1';settle_ms='200';workloads=$script:SpectraWorkloads})
 for($i=0;$i -lt 5;$i++){
- $area=$script:SpectraAreas[$i];$operations=[uint64]$script:SpectraOperations[$i];$elapsed=($operations*1000000).ToString($script:SpectraInvariant)
+ $area=$script:SpectraAreas[$i];$operations=[uint64]$script:SpectraOperations[$i]*4;$elapsed=($operations*1000000).ToString($script:SpectraInvariant)
  foreach($phase in @('warmup','measurement')){
   $n=if($phase -ceq 'warmup'){1}else{5}
   $batches=if($phase -ceq 'warmup'){[uint64][Math]::Max(3,[Math]::Ceiling(1000/[double]$operations))}else{[uint64]1}
-  for($j=0;$j -lt $n;$j++){$records.Add(@{schema='r4os.spectra.standard';schema_version=1;kind='sample';area_id=$area;metric_id='elapsed_ns_per_operation';phase=$phase;sample_index=[string]$j;status='ok';failure_reason=$null;elapsed_ns=($operations*$batches*1000000).ToString($script:SpectraInvariant);operation_count=($operations*$batches).ToString($script:SpectraInvariant);bytes_processed=([uint64]$script:SpectraBytes[$i]*$batches).ToString($script:SpectraInvariant);value='1000000.000000';clock_source='TSC';clock_generation='1';clock_resolution_ns='1';observer_overhead_ns='10'})}
+  for($j=0;$j -lt $n;$j++){$records.Add(@{schema='r4os.spectra.standard';schema_version=1;kind='sample';area_id=$area;metric_id='elapsed_ns_per_operation';phase=$phase;sample_index=[string]$j;worker_count='4';completed_workers='4';status='ok';failure_reason=$null;elapsed_ns=($operations*$batches*1000000).ToString($script:SpectraInvariant);operation_count=($operations*$batches).ToString($script:SpectraInvariant);bytes_processed=([uint64]$script:SpectraBytes[$i]*4*$batches).ToString($script:SpectraInvariant);value='1000000.000000';clock_source='TSC';clock_generation='1';clock_resolution_ns='1';observer_overhead_ns='10'})}
  }
- $records.Add(@{schema='r4os.spectra.standard';schema_version=1;kind='metric';area_id=$area;metric_id='elapsed_ns_per_operation';metric_version='1';unit='ns/operation';direction='lower_is_better';primary=$true;weight='1';status='ok';failure_reason=$null;sample_count='5';median_value='1000000.000000';min_value='1000000.000000';max_value='1000000.000000';mad_value='0.000000';checks=@{work_complete=$true;clock_valid=$true;cleanup_confirmed=$true}})
+ $records.Add(@{schema='r4os.spectra.standard';schema_version=1;kind='metric';area_id=$area;metric_id='elapsed_ns_per_operation';metric_version='2';unit='ns/operation';direction='lower_is_better';primary=$true;weight='1';status='ok';failure_reason=$null;sample_count='5';median_value='1000000.000000';min_value='1000000.000000';max_value='1000000.000000';mad_value='0.000000';checks=@{work_complete=$true;clock_valid=$true;cleanup_confirmed=$true}})
  $records.Add(@{schema='r4os.spectra.standard';schema_version=1;kind='score';area_id=$area})
 }
 $records.Add(@{schema='r4os.spectra.standard';schema_version=1;kind='score';area_id='overall'})
@@ -44,11 +44,11 @@ try{
  $current.status='failed';$current.metrics[2].status='failed';$current.metrics[2].median_value=$null
  Set-SpectraScores $current $reference
  Assert-True ($null -eq $current.scores[2].score -and $null -eq $current.scores[5].score -and $current.scores[0].score -ceq '200.000000') 'Partial results must not reweight the overall score.'
- foreach($case in @('clock','backend','missing','zero','weight','suite','warmup')){
+ foreach($case in @('clock','policy','missing','zero','weight','suite','warmup')){
   $base=Copy-Value $reference
   switch($case){
    'clock' {$base.instrumentation_mode='detail'}
-   'backend' {$base.environment.qemu.backend='tcg'}
+   'policy' {$base.environment.cpu_policy='fixed-four'}
    'missing' {$base.metrics=@($base.metrics[0..3])}
    'zero' {$base.metrics[0].median_value='0'}
    'weight' {$base.metrics[0].weight='2'}
@@ -58,6 +58,25 @@ try{
   $probe=Copy-Value $run;Set-SpectraScores $probe $base
   Assert-True (@($probe.scores|Where-Object {$null -ne $_.score}).Count -eq 0) ('Invalid reference scored: '+$case)
  }
+ # Different complete CPU counts/native hardware must affect throughput,
+ # while insufficient worker completion and forged totals are rejected.
+ foreach($cpus in @('1','16')){
+  $native=Copy-Value @($records.ToArray());$ctx=Copy-Value $context
+  $ctx.environment.vcpus=$cpus;$ctx.environment.execution='native';$ctx.environment.qemu=$null;$ctx.environment.ram_bytes='25769803776'
+  foreach($item in $native){
+   if($item.kind -ceq 'header'){$item.vcpus=$cpus;$item.worker_count=$cpus}
+   if($item.kind -ceq 'sample'){
+    foreach($field in @('elapsed_ns','operation_count','bytes_processed')){$item[$field]=([uint64]$item[$field]/4*[uint64]$cpus).ToString($script:SpectraInvariant)}
+    # Retain at least one second of active work for the synthetic 1-CPU warmup.
+    if($item.phase -ceq 'warmup' -and [uint64]$item.elapsed_ns -lt 1000000000){
+     foreach($field in @('elapsed_ns','operation_count','bytes_processed')){$item[$field]=([uint64]$item[$field]*4).ToString($script:SpectraInvariant)}
+    }
+    $item.worker_count=$cpus;$item.completed_workers=$cpus
+   }
+  }
+  Write-Raw $native;$scaled=ConvertTo-SpectraRun $raw $ctx;Set-SpectraScores $scaled $reference
+  Assert-True ($scaled.samples.Count -eq 30 -and $scaled.scores[5].score -ceq '100.000000') ('Native CPU-count comparison failed: '+$cpus)
+ }
  $probe=Copy-Value $run;Set-SpectraScores $probe @{}
  Assert-True ($null -eq $probe.scores[5].score) 'Malformed reference must be explicitly unavailable.'
  Assert-True ((Get-SpectraU64 '18446744073709551615') -eq [uint64]::MaxValue) 'Maximum uint64 lost precision.'
@@ -66,12 +85,13 @@ try{
  $again=Get-Content -Raw $output|ConvertFrom-Json -AsHashtable
  Assert-True ($again.samples[0].elapsed_ns -is [string]) 'Raw counters must remain strings.'
  $rejected=$false;try{Write-SpectraRun $run $output}catch{$rejected=$true};Assert-True $rejected 'Existing run export was overwritten.'
- foreach($case in @('duplicate','truncated','wrong-work','zero-time','bad-clock','aggregate','short-warmup','few-warmups')){
+ foreach($case in @('duplicate','truncated','wrong-work','zero-time','bad-clock','aggregate','short-warmup','few-warmups','missing-worker')){
   $items=Copy-Value @($records.ToArray())
   switch($case){
    'duplicate' {$items+=,$items[1]}
    'truncated' {$items=@($items[0..($items.Count-2)])}
    'wrong-work' {$items[1].operation_count='127'}
+   'missing-worker' {$items[1].completed_workers='3'}
    'zero-time' {$items[1].elapsed_ns='0'}
    'bad-clock' {$items[1].clock_generation='0'}
    'aggregate' {$items[7].median_value='999999.000000'}

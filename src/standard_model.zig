@@ -1,8 +1,10 @@
 //! Fixed work and scoring contract, independent of guest APIs/presentation.
 const std = @import("std");
-pub const suite_version = "spectra-standard-2";
+pub const suite_version = "spectra-standard-3";
+pub const metric_version = "2";
+pub const cpu_policy = "all-available-v1";
 pub const scoring_version = "spectra-geomean-1";
-pub const cache_state = "active-per-area-1s-3batches-v2";
+pub const cache_state = "parallel-active-per-area-1s-3batches-v3";
 pub const warmup_min_ns: u64 = 1_000_000_000;
 pub const warmup_min_batches: u64 = 3;
 pub const warmup_runs = 1;
@@ -10,9 +12,25 @@ pub const repetitions = 5;
 pub const area_ids = [_][]const u8{ "scheduler_sync", "memory", "ipc", "lifecycle", "filesystem_io" };
 pub const operation_counts = [_]u64{ 16384, 512, 16384, 32, 8 };
 pub const byte_counts = [_]u64{ 0, 512 * 128 * 1024, 16384 * 24, 0, 8 * 64 * 1024 * 2 };
-pub const workload_ids = [_][]const u8{ "notification-ready-roundtrip-16384-v2", "demand-vm-512x128k-v2", "kernel-dns-status-16384-v2", "owned-fixture-32-v2", "ntfs-stream-8x64k-v1" };
+pub const workload_ids = [_][]const u8{ "allcpu-notification-ready-roundtrip-16384-v3", "allcpu-demand-vm-512x128k-v3", "allcpu-kernel-dns-status-16384-v3", "allcpu-owned-fixture-32-v3", "allcpu-ntfs-stream-8x64k-v3" };
+pub fn batchOperations(area: usize, cpus: u32) u64 {
+    return operation_counts[area] * cpus;
+}
+pub fn processedBytes(area: usize, cpus: u32) u64 {
+    return byte_counts[area] * cpus;
+}
 pub const metric_id = "elapsed_ns_per_operation";
+// Work grows with available CPUs. These are failure bounds, never speed gates.
+// Warmup needs at least three whole batches; give it three batch budgets.
+pub fn timeoutScale(cpus: u32) u64 {
+    return @max(1, (@as(u64, cpus) + 3) / 4);
+}
+pub const batch_timeout_ns: u64 = 30_000_000_000;
+pub const suite_timeout_ns: u64 = 300_000_000_000;
+pub const launcher_timeout_ns: u64 = 360_000_000_000;
 pub const Sample = struct {
+    workers: u32 = 0,
+    completed_workers: u32 = 0,
     elapsed_ns: u64 = 0,
     operations: u64 = 0,
     bytes: u64 = 0,

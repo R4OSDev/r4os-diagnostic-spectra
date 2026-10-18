@@ -46,7 +46,7 @@ fn quantity(out: *Output, name: []const u8, elapsed: u64, operations: u64, usabl
     out.write(std.fmt.bufPrint(&bytes, "{d:0>6}", .{scaled % 1_000_000}) catch unreachable);
     out.write("\"");
 }
-pub fn render(out: *Output, samples: *const [5][6]model.Sample, metrics: *const [5]model.Metric, reference: reference_api.Reference, config: reference_api.Config, exit_code: i32, beginning: anytype) void {
+pub fn render(out: *Output, samples: *const [5][6]model.Sample, metrics: *const [5]model.Metric, reference: reference_api.Reference, config: reference_api.Config, exit_code: i32, beginning: anytype, cpus: u32) void {
     if (out.format == .json) {
         record(out, "header");
         str(out, "suite_version", model.suite_version);
@@ -58,7 +58,9 @@ pub fn render(out: *Output, samples: *const [5][6]model.Sample, metrics: *const 
         number(out, "warmup_min_ns", model.warmup_min_ns);
         number(out, "warmup_min_batches", model.warmup_min_batches);
         number(out, "repetitions", 5);
-        number(out, "vcpus", 4);
+        number(out, "vcpus", cpus);
+        number(out, "worker_count", cpus);
+        str(out, "cpu_policy", model.cpu_policy);
         number(out, "settle_ms", config.settle_ms);
         number(out, "guest_started_ns", beginning.instant_ns);
         str(out, "reference_mode", if (config.self_reference) "self" else if (config.path[0] != 0) "file" else "none");
@@ -88,6 +90,8 @@ pub fn render(out: *Output, samples: *const [5][6]model.Sample, metrics: *const 
                 str(out, "status", if (sample.reason == null) "ok" else if (std.mem.eql(u8, sample.reason.?, "not-run")) "skipped" else "failed");
                 reason(out, sample.reason);
                 optionalNumber(out, "elapsed_ns", if (sample.elapsed_ns != 0) sample.elapsed_ns else null);
+                number(out, "worker_count", sample.workers);
+                number(out, "completed_workers", sample.completed_workers);
                 number(out, "operation_count", sample.operations);
                 number(out, "bytes_processed", sample.bytes);
                 str(out, "clock_source", switch (sample.clock_source) {
@@ -105,17 +109,17 @@ pub fn render(out: *Output, samples: *const [5][6]model.Sample, metrics: *const 
             record(out, "metric");
             str(out, "area_id", area);
             str(out, "metric_id", model.metric_id);
-            str(out, "metric_version", "1");
+            str(out, "metric_version", model.metric_version);
             str(out, "unit", "ns/operation");
             str(out, "direction", "lower_is_better");
             out.write(",\"primary\":true,\"weight\":\"1\"");
             str(out, "status", if (metric.reason == null) "ok" else if (std.mem.eql(u8, metric.reason.?, "not-run")) "skipped" else "failed");
             reason(out, metric.reason);
             number(out, "sample_count", metric.count);
-            quantity(out, "median_value", metric.median_ns, model.operation_counts[index], metric.reason == null);
-            quantity(out, "min_value", metric.minimum_ns, model.operation_counts[index], metric.reason == null);
-            quantity(out, "max_value", metric.maximum_ns, model.operation_counts[index], metric.reason == null);
-            quantity(out, "mad_value", metric.mad_ns, model.operation_counts[index], metric.reason == null);
+            quantity(out, "median_value", metric.median_ns, model.batchOperations(index, cpus), metric.reason == null);
+            quantity(out, "min_value", metric.minimum_ns, model.batchOperations(index, cpus), metric.reason == null);
+            quantity(out, "max_value", metric.maximum_ns, model.batchOperations(index, cpus), metric.reason == null);
+            quantity(out, "mad_value", metric.mad_ns, model.batchOperations(index, cpus), metric.reason == null);
             out.write(",\"checks\":{\"work_complete\":");
             out.write(if (metric.reason == null) "true" else "false");
             out.write(",\"clock_valid\":");
@@ -131,7 +135,7 @@ pub fn render(out: *Output, samples: *const [5][6]model.Sample, metrics: *const 
                 out.write(why);
                 out.write(")");
             } else {
-                out.number(metric.median_ns / model.operation_counts[index]);
+                out.number(metric.median_ns / model.batchOperations(index, cpus));
                 out.write(" ns/operation; min/median/max=");
                 out.number(metric.minimum_ns);
                 out.write("/");
@@ -145,7 +149,7 @@ pub fn render(out: *Output, samples: *const [5][6]model.Sample, metrics: *const 
             out.write("\r\n");
         }
         if (metric.reason == null) {
-            if (config.self_reference) scores[index] = 100 else if (reference.reason == null) scores[index] = model.score(reference.values[index].?, @as(f64, @floatFromInt(metric.median_ns)) / @as(f64, @floatFromInt(model.operation_counts[index])));
+            if (config.self_reference) scores[index] = 100 else if (reference.reason == null) scores[index] = model.score(reference.values[index].?, @as(f64, @floatFromInt(metric.median_ns)) / @as(f64, @floatFromInt(model.batchOperations(index, cpus))));
         }
     }
     const total = if (exit_code == 0) model.overall(scores) else null;

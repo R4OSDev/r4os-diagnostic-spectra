@@ -3,30 +3,31 @@
   "schema_version": 1,
   "run_id": "83030000-0000-4000-8000-000000000001",
   "status": "completed",
-  "suite_version": "spectra-standard-2",
+  "suite_version": "spectra-standard-3",
   "scoring_version": "spectra-geomean-1",
   "comparison_key": "fixture-method",
   "instrumentation_mode": "base",
   "environment": {
     "vcpus": "4",
+    "cpu_policy": "all-available-v1",
     "warmup_runs": "1",
     "warmup_min_ns": "1000000000",
     "warmup_min_batches": "3",
     "repetitions": "5",
-    "cache_state": "active-per-area-1s-3batches-v2",
+    "cache_state": "parallel-active-per-area-1s-3batches-v3",
     "workloads": {
-      "scheduler_sync": "notification-ready-roundtrip-16384-v2",
-      "memory": "demand-vm-512x128k-v2",
-      "ipc": "kernel-dns-status-16384-v2",
-      "lifecycle": "owned-fixture-32-v2",
-      "filesystem_io": "ntfs-stream-8x64k-v1"
+      "scheduler_sync": "allcpu-notification-ready-roundtrip-16384-v3",
+      "memory": "allcpu-demand-vm-512x128k-v3",
+      "ipc": "allcpu-kernel-dns-status-16384-v3",
+      "lifecycle": "allcpu-owned-fixture-32-v3",
+      "filesystem_io": "allcpu-ntfs-stream-8x64k-v3"
     }
   },
   "metrics": [
     {
       "area_id": "scheduler_sync",
       "metric_id": "elapsed_ns_per_operation",
-      "metric_version": "1",
+      "metric_version": "2",
       "unit": "ns/operation",
       "direction": "lower_is_better",
       "weight": "1",
@@ -44,7 +45,7 @@
     {
       "area_id": "memory",
       "metric_id": "elapsed_ns_per_operation",
-      "metric_version": "1",
+      "metric_version": "2",
       "unit": "ns/operation",
       "direction": "lower_is_better",
       "weight": "1",
@@ -62,7 +63,7 @@
     {
       "area_id": "ipc",
       "metric_id": "elapsed_ns_per_operation",
-      "metric_version": "1",
+      "metric_version": "2",
       "unit": "ns/operation",
       "direction": "lower_is_better",
       "weight": "1",
@@ -80,7 +81,7 @@
     {
       "area_id": "lifecycle",
       "metric_id": "elapsed_ns_per_operation",
-      "metric_version": "1",
+      "metric_version": "2",
       "unit": "ns/operation",
       "direction": "lower_is_better",
       "weight": "1",
@@ -98,7 +99,7 @@
     {
       "area_id": "filesystem_io",
       "metric_id": "elapsed_ns_per_operation",
-      "metric_version": "1",
+      "metric_version": "2",
       "unit": "ns/operation",
       "direction": "lower_is_better",
       "weight": "1",
