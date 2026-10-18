@@ -16,9 +16,10 @@ pub fn snapshot(dev: *const r4os.r4dev.Context, result: *r4os.abi.ProgramSmpTlbS
 pub fn collect(dev: *const r4os.r4dev.Context, out: *Output) bool {
     var report: r4os.abi.ProgramSmpTlbSnapshot = .{};
     if (!dev.hasFn("performance_smp_tlb") or !snapshot(dev, &report)) {
-        out.unavailable("smp", "passive SMP/TLB source absent or snapshot unavailable"); return false;
+        out.unavailable("smp", "passive SMP/TLB source absent or snapshot unavailable");
+        return false;
     }
     out.record("smp_tlb", "smp", 0, report);
     out.message("smp", "Passive counters since boot; owner loads are not one atomic snapshot. No workload or historical check pass is implied.", false);
-    return true;
+    return @import("cpu_topology.zig").collect(dev, out);
 }
