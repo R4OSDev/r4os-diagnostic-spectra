@@ -49,6 +49,10 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     const resources = app.resources();
     global_sys = sys;
 
+    if (argsEqual(app.args(), "/PLACEMENT")) return @import("placement.zig").parent(app);
+    if (argsEqual(app.args(), "/PLACEMENTBSP") or @import("std").mem.startsWith(u8, app.args(), "/PLACEMENTBSP:")) return @import("placement.zig").bsp(app);
+    if (@import("std").mem.startsWith(u8, app.args(), "/PLACEMENTWORKER:")) return @import("placement.zig").child(app, app.args());
+
     if (argsEqual(app.args(), "/PROCESSEXIT")) return processExitProfile(&sys);
     if (argsEqual(app.args(), "/EXITMAIN")) return processExitChild(&sys, false);
     if (argsEqual(app.args(), "/EXITWORKER")) return processExitChild(&sys, true);
@@ -640,6 +644,9 @@ fn processExitChild(sys: *r4os.r4sys.Context, from_worker: bool) i32 {
 }
 fn processExitPeer(_: u64) callconv(.c) i32 {
     var sys = global_sys orelse return 1;
+    var identity: r4os.abi.ProgramJoinHandle = .{};
+    const placement: r4os.abi.ThreadPlacementRequest = .{ .work_class = r4os.abi.thread_placement_class_batch, .preferred_cpu = 0 };
+    if (sys.threadCurrentHandle(&identity) != r4os.abi.thread_ok or sys.threadPlacementSet(&identity, &placement, &.{1}) != r4os.abi.thread_ok) return 1;
     @atomicStore(bool, &exit_peer_ready, true, .release);
     _ = sys.notificationWait(exit_notification, 0, r4os.abi.thread_wait_forever);
     return fail(&sys, "SPECTRA THREAD process exit peer survived");
