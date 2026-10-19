@@ -10,6 +10,7 @@ const parallel = @import("standard_parallel.zig");
 const workloads = @import("standard_workloads.zig");
 var sys: r4os.r4sys.Context = undefined;
 var net: ?r4os.r4net.Context = null;
+var dev: ?r4os.r4dev.Context = null;
 var samples: [5][6]model.Sample = undefined;
 var metrics: [5]model.Metric = undefined;
 var cleanup_failed = false;
@@ -42,11 +43,25 @@ fn observerCost() ?u64 {
     return minimum;
 }
 fn takeSample(index: usize, deadline: u64) model.Sample {
+    const before_generation = capacityGeneration();
     var capacity: a.CpuCapacity = .{};
     if (sys.cpuCapacity(&capacity) != a.thread_ok or capacity.available_cpus != cpu_count) return .{ .workers = cpu_count, .reason = "cpu-capacity-changed" };
-    const result = parallel.sample(&sys, net, index, cpu_count, deadline, observer_overhead_ns);
+    var result = parallel.sample(&sys, net, index, cpu_count, deadline, observer_overhead_ns);
     cleanup_failed = cleanup_failed or result.retained;
+    if (before_generation) |generation| {
+        if (capacityGeneration() != generation) result.sample.reason = "cpu-capacity-changed";
+    }
     return result.sample;
+}
+// Optional on older providers. Queries stay outside every measured interval;
+// Suite3 work/reference/scoring are unchanged. A count returning to its old
+// value cannot hide a completed offline/online cycle during the batch.
+fn capacityGeneration() ?u64 {
+    const source = dev orelse return null;
+    if (!source.hasFn("cpu_lifecycle")) return null;
+    var info: a.CpuLifecycleInfo = .{};
+    if (source.cpuLifecycle(a.cpu_lifecycle_op_query, 0, 0, &info) != a.cpu_lifecycle_ok) return null;
+    return info.capacity_generation;
 }
 fn activeWarmup(index: usize, deadline: u64) model.Sample {
     var total: model.Sample = .{};
@@ -86,6 +101,7 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     };
     sys = app.system();
     net = app.networkLowLevel();
+    dev = app.devicesLowLevel();
     cleanup_failed = false;
     if (out.detail == null) {
         out.unavailable("standard", "instrumentation-mode-unavailable");

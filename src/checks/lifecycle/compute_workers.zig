@@ -4,6 +4,13 @@ const route = @import("../../route.zig");
 const a = r4os.abi;
 const AtomicBool = @import("std").atomic.Value(bool);
 
+fn failed(sys: r4os.r4sys.Context, cycle: usize, stage: []const u8, code: i32) bool {
+    var buffer: [160]u8 = undefined;
+    const text = @import("std").fmt.bufPrint(&buffer, "SPECTRA LIFECYCLE compute failure cycle={d} stage={s} code={d}", .{ cycle, stage, code }) catch "SPECTRA LIFECYCLE compute failure";
+    sys.println(text);
+    return false;
+}
+
 const Work = struct {
     sys: r4os.r4sys.Context,
     release: AtomicBool = .init(false),
@@ -62,7 +69,9 @@ pub fn hold(sys: r4os.r4sys.Context) i32 {
     while (!sys.programShouldClose()) sys.sleepTicks(1);
     work.release.store(true, .release);
     var code: i32 = -1;
-    if (sys.threadHandleJoin(&handle, sys.ticksFromMilliseconds(5000), &code) != a.thread_ok or code != 37 or !work.entered.load(.acquire)) {
+    const joined = sys.threadHandleJoin(&handle, sys.ticksFromMilliseconds(5000), &code);
+    if (joined != a.thread_ok or code != 37 or !work.entered.load(.acquire)) {
+        _ = failed(sys, 0, if (joined != a.thread_ok) "hold-join" else if (code != 37) "hold-worker-exit" else "hold-not-entered", if (joined != a.thread_ok) joined else code);
         // Keep the stack resident until the ordinary process exit has stopped
         // every peer; a failed join cannot release this frame normally.
         _ = sys.programExit(41, a.program_exit_reason_failed);
@@ -131,7 +140,7 @@ pub fn run(sys: r4os.r4sys.Context) bool {
     for (0..2) |cycle| {
         var child = switch (resources.spawn(path.asZ(), route.arguments("LIFECYCLE", "/COMPUTEHOLD").ptr(), .console)) {
             .process => |value| value,
-            .failure => return false,
+            .failure => |reason| return failed(sys, cycle, "spawn", reason),
         };
         const owner = a.ProgramProcessHandle{ .instance_id = child.raw, .generation = child.generation };
         defer if (child.valid()) {
@@ -143,23 +152,42 @@ pub fn run(sys: r4os.r4sys.Context) bool {
             return false;
         }
         const status = if (cycle == 0) child.requestClose() else child.kill();
-        if (status != a.program_handle_ok) return false;
+        if (status != a.program_handle_ok) return failed(sys, cycle, "close-or-kill", status);
         switch (child.wait(timeout())) {
-            .exited => |code| if (cycle == 0 and code != 0) return false,
-            else => return false,
+            .exited => |code| if (cycle == 0 and code != 0) return failed(sys, cycle, "child-exit", code),
+            else => return failed(sys, cycle, "child-wait", -1),
         }
-        var cursor: a.ProgramInventoryCursor = .{};
-        var summary: a.ProgramInventorySummary = .{};
-        if (sys.programInventoryBegin(&cursor, &summary) != a.program_handle_ok) return false;
-        while (true) {
-            var entries: [16]a.ProgramThreadSnapshot = undefined;
-            var page: a.ProgramInventoryPageInfo = .{};
-            if (sys.programInventoryThreads(&cursor, &entries, &page) != a.program_handle_ok or page.status == a.program_inventory_status_restart or page.returned > entries.len) return false;
-            for (entries[0..page.returned]) |entry| {
-                if (entry.handle.instance_id == owner.instance_id and entry.handle.instance_generation == owner.generation) return false;
+        const inspection_start = sys.ticks();
+        var stable = false;
+        // The catalog is system-wide: an unrelated exact process retirement
+        // may invalidate this cursor after our own genuine wait. Retry only
+        // the documented restart status, never accept a partial scan or hide
+        // a retained thread belonging to the exact completed generation.
+        inspect: while (sys.ticks() -% inspection_start < sys.ticksFromMilliseconds(5000)) {
+            var cursor: a.ProgramInventoryCursor = .{};
+            var summary: a.ProgramInventorySummary = .{};
+            const begun = sys.programInventoryBegin(&cursor, &summary);
+            if (begun != a.program_handle_ok) return failed(sys, cycle, "inventory-begin", begun);
+            while (true) {
+                var entries: [16]a.ProgramThreadSnapshot = undefined;
+                var page: a.ProgramInventoryPageInfo = .{};
+                const result = sys.programInventoryThreads(&cursor, &entries, &page);
+                if (result != a.program_handle_ok) return failed(sys, cycle, "inventory-threads", result);
+                if (page.status == a.program_inventory_status_restart) {
+                    sys.sleepTicks(1);
+                    continue :inspect;
+                }
+                if (page.returned > entries.len) return failed(sys, cycle, "inventory-capacity", @intCast(page.returned));
+                for (entries[0..page.returned]) |entry| {
+                    if (entry.handle.instance_id == owner.instance_id and entry.handle.instance_generation == owner.generation) return failed(sys, cycle, "retained-own-thread", @intCast(entry.handle.thread_id));
+                }
+                if (page.has_more == 0) {
+                    stable = true;
+                    break :inspect;
+                }
             }
-            if (page.has_more == 0) break;
         }
+        if (!stable) return failed(sys, cycle, "inventory-restart-timeout", 0);
     }
     return true;
 }

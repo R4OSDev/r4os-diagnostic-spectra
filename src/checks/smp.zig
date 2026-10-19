@@ -48,7 +48,9 @@ fn busy(r: Report) bool {
 }
 const Admission = @import("admission.zig").Probe(Report, invoke, passed, busy);
 pub fn run(app: *r4os.App, args: []const u8, out: *Output) i32 {
-    if (args.len != 0 and !cli.same(args, "/ADMISSION")) { out.unavailable("smp", "use CHECK SMP [/ADMISSION]"); return 2; }
+    if (cli.same(args, "/LIFECYCLE")) return @import("cpu_lifecycle.zig").launch(app, out);
+    if (std.ascii.startsWithIgnoreCase(args, "/LIFECYCLEBSP:")) return @import("cpu_lifecycle.zig").foreground(app, args[14..], out);
+    if (args.len != 0 and !cli.same(args, "/ADMISSION")) { out.unavailable("smp", "use CHECK SMP [/ADMISSION|/LIFECYCLE]"); return 2; }
     const dev = app.devicesLowLevel() orelse { out.unavailable("smp", "R4DEV unavailable"); return 2; };
     if (!dev.hasFn("smp_kernel_check") or !dev.hasFn("performance_smp_tlb")) { out.unavailable("smp", "native SMP source unavailable"); return 2; }
     if (!headers(&dev)) { out.message("smp", "SPECTRA SMP header contract: FAILED", false); return 1; }

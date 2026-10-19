@@ -177,6 +177,9 @@ fn textField(comptime name: []const u8) bool {
 }
 
 fn unit(comptime name: []const u8) []const u8 {
+    // Completed offline/online transitions are an operational event count,
+    // independent of optional cycle-timing instrumentation.
+    if (std.mem.eql(u8, name, "offline_cycles")) return "count";
     if (std.mem.indexOf(u8, name, "cycles") != null) return "tsc-ticks";
     if (std.mem.endsWith(u8, name, "_ns")) return "ns";
     if (std.mem.startsWith(u8, name, "ticks_since_")) return "event-ticks";
@@ -200,6 +203,7 @@ fn unit(comptime name: []const u8) []const u8 {
 }
 
 fn detailField(group: []const u8, comptime name: []const u8) bool {
+    if (std.mem.eql(u8, name, "offline_cycles")) return false;
     if (std.mem.indexOf(u8, name, "cycles") != null or std.mem.indexOf(u8, name, "spins") != null) return true;
     if (std.mem.eql(u8, group, "stacks") and std.mem.startsWith(u8, name, "high_water")) return true;
     if ((std.mem.eql(u8, group, "irq") or std.mem.eql(u8, group, "work") or std.mem.eql(u8, group, "ipc_timing")) and std.mem.endsWith(u8, name, "_ns") and !std.mem.startsWith(u8, name, "clock_") and !std.mem.endsWith(u8, name, "_threshold_ns")) return true;
