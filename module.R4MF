@@ -1,7 +1,7 @@
 R4OS_MODULE_MANIFEST=2
 KIND=R4X
 NAME=SPECTRA
-VERSION=0.1.29
+VERSION=0.1.30
 LANGUAGE=Zig
 SOURCE=src/main.zig
 ENTRY_MODE=app
@@ -23,3 +23,4 @@ META=diagnostic.name=SPECTRA
 META=runtime.parallel=owned-v1
 META=memory.profile=workstation
 META=memory.tag=spectra
+META=runtime.workers=owned-v1

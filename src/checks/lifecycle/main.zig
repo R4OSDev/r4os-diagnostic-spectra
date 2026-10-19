@@ -236,6 +236,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     if (hasArg(ctx.sys.argsRaw(), lifecycle_host_arg)) return lifecycleHost(&ctx);
     if (hasArg(ctx.sys.argsRaw(), lifecycle_thread_exit_arg)) ctx.sys.threadExit(89);
     if (hasArg(ctx.sys.argsRaw(), dynamic_thread_hold_arg)) return dynamicThreadHold(&ctx);
+    if (hasArg(ctx.sys.argsRaw(), "/COMPUTEHOLD")) return @import("compute_workers.zig").hold(ctx.sys);
     ctx.sys.println("SPECTRA LIFECYCLE");
     if (hasArg(ctx.sys.argsRaw(), "/WATCHCANCEL")) return testWatchCancellation(&ctx, false);
     if (hasArg(ctx.sys.argsRaw(), "/STANDARDCANCEL")) return testWatchCancellation(&ctx, true);
@@ -244,6 +245,42 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     if (hasArg(ctx.sys.argsRaw(), gui_raster_chain_hold_arg)) return guiRasterChainHold(&ctx);
     if (hasArg(ctx.sys.argsRaw(), gui_frame_hold_arg)) return guiFrameHold(&ctx);
     if (!ctx.dev.hasFn("memory_summary")) return fail(&ctx, "memory snapshot missing");
+    if (hasArg(ctx.sys.argsRaw(), "/WORKERS")) {
+        if (!@import("compute_workers.zig").run(ctx.sys)) return fail(&ctx, "compute warmup");
+        const before = captureRuntimeBaseline(&ctx) orelse return 1;
+        if (!@import("compute_workers.zig").run(ctx.sys)) return fail(&ctx, "compute lifecycle");
+        const after = captureRuntimeBaseline(&ctx) orelse return 1;
+        if (!sameTotals(before.resources, after.resources) or before.instance_count != after.instance_count or
+            !sameStorageCurrent(before.storage, after.storage))
+        {
+            inline for (@typeInfo(ResourceTotals).@"struct".fields) |field| {
+                if (@field(before.resources, field.name) != @field(after.resources, field.name)) {
+                    ctx.sys.write("compute resources " ++ field.name ++ "=");
+                    ctx.sys.printU64(@field(before.resources, field.name));
+                    ctx.sys.write("/");
+                    ctx.sys.printU64(@field(after.resources, field.name));
+                    ctx.sys.println("");
+                }
+            }
+            inline for (.{ "version", "size", "core_bytes_per_instance", "registry_reserved_core_bytes", "live_core_bytes", "active_instance_bytes", "reserved_instance_bytes", "current_payload_bytes", "current_runtime_bytes", "current_console_bytes", "current_gui_bytes", "active_instances", "active_console_instances", "active_gui_instances", "active_service_instances", "runtime_payloads", "process_payloads", "environment_payloads", "console_payloads", "console_output_payloads", "gui_payloads", "gui_command_payloads", "gui_raster_payloads", "current_gui_frame_bytes", "current_gui_frame_commands", "current_gui_frame_nodes", "allocation_failures", "transaction_rollbacks", "owner_mismatches", "header_errors", "free_failures", "quarantined_payloads", "quarantined_bytes" }) |field| {
+                if (@field(before.storage, field) != @field(after.storage, field)) {
+                    ctx.sys.write("compute storage " ++ field ++ "=");
+                    ctx.sys.printU64(@intCast(@field(before.storage, field)));
+                    ctx.sys.write("/");
+                    ctx.sys.printU64(@intCast(@field(after.storage, field)));
+                    ctx.sys.println("");
+                }
+            }
+            ctx.sys.write("compute instances=");
+            ctx.sys.printU64(before.instance_count);
+            ctx.sys.write("/");
+            ctx.sys.printU64(after.instance_count);
+            ctx.sys.println("");
+            return fail(&ctx, "compute resources retained");
+        }
+        ctx.sys.println("SPECTRA LIFECYCLE workers inheritance=OK console=OK close-join=OK kill-reap=OK resources=OK");
+        return 0;
+    }
     if (hasArg(ctx.sys.argsRaw(), "/APPS")) {
         if (!warmParallelAppRegistry(&ctx)) return fail(&ctx, "apps registry warmup");
         const scratch = ctx.sys.allocator().alloc(u8, 128 * 1024) catch return fail(&ctx, "apps caller buffer warmup");

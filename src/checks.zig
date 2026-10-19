@@ -56,7 +56,9 @@ fn write(bytes: [*]const u8, length: u32) callconv(.c) i32 {
     return @intCast(length);
 }
 
-fn putc(byte: u8) callconv(.c) void { _ = write(&.{byte}, 1); }
+fn putc(byte: u8) callconv(.c) void {
+    _ = write(&.{byte}, 1);
+}
 
 fn prepare(app: *r4os.App, args: [:0]const u8, out: *Output) bool {
     if (args.len >= arguments.len or app.raw.import_count > imports.len) return false;
@@ -84,7 +86,9 @@ fn prepare(app: *r4os.App, args: [:0]const u8, out: *Output) bool {
         adapted.bundle.sys = &table;
         const source: [*]const r4os.abi.R4XStartImport = @ptrFromInt(raw.imports);
         @memcpy(imports[0..raw.import_count], source[0..raw.import_count]);
-        for (imports[0..raw.import_count]) |*item| if (item.group_id == @intFromEnum(r4os.abi.R4LGroup.r4sys)) { item.table = @intFromPtr(&table); };
+        for (imports[0..raw.import_count]) |*item| if (item.group_id == @intFromEnum(r4os.abi.R4LGroup.r4sys)) {
+            item.table = @intFromPtr(&table);
+        };
         raw.imports = @intFromPtr(&imports);
     }
     return true;
@@ -104,12 +108,20 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
         } else {
             const suites = .{ "CLOCK", "BLIT", "SERVICE-REGISTRY", "KERNEL-IPC", "DRIVER-WORK", "PCI-INVENTORY", "MEMORY-METADATA" };
             var found = false;
-            inline for (suites) |name| if (cli.same(group, name)) { found = true; };
-            if (!found) { out.unavailable("bench", "unknown benchmark group"); return 2; }
+            inline for (suites) |name| if (cli.same(group, name)) {
+                found = true;
+            };
+            if (!found) {
+                out.unavailable("bench", "unknown benchmark group");
+                return 2;
+            }
             args = std.fmt.bufPrintZ(&args_buffer, "/BENCHMARK /{s} {s}", .{ group, args }) catch return 2;
         }
     } else if (cli.same(group, "PERFORMANCE")) {
-        if (args.len != 0) { out.unavailable("check", "PERFORMANCE takes no options; use BENCH for workloads"); return 2; }
+        if (args.len != 0) {
+            out.unavailable("check", "PERFORMANCE takes no options; use BENCH for workloads");
+            return 2;
+        }
         args = "/CONFORMANCE";
     }
     if (!prepare(app, args, out)) return 2;
@@ -128,9 +140,7 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
                 if (std.ascii.startsWithIgnoreCase(token, "/BLOCKQUEUE")) block_queue_selected = true;
                 if (std.ascii.startsWithIgnoreCase(token, "/NVMEIRQ")) nvme_irq_selected = true;
             }
-            if (nvme_irq_selected) result = @import("checks/storage/nvme_irq.zig").run(&adapted, args, out)
-            else if (block_queue_selected) result = @import("checks/storage/block_queue.zig").run(&adapted, args, out)
-            else result = @import("checks/storage/main.zig").r4_app_main(&adapted);
+            if (nvme_irq_selected) result = @import("checks/storage/nvme_irq.zig").run(&adapted, args, out) else if (block_queue_selected) result = @import("checks/storage/block_queue.zig").run(&adapted, args, out) else result = @import("checks/storage/main.zig").r4_app_main(&adapted);
         }
         if (cli.same(group, "tcp")) result = @import("checks/tcp/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "boot")) result = @import("checks/boot/main.zig").r4_app_main(&adapted);
@@ -141,8 +151,7 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
             while (options.next() catch return 2) |token| {
                 if (std.ascii.startsWithIgnoreCase(token, "/KERNEL")) kernel_selected = true;
             }
-            if (kernel_selected) result = @import("checks/thread/kernel.zig").run(&adapted, args, out)
-            else result = @import("checks/thread/main.zig").r4_app_main(&adapted);
+            if (kernel_selected) result = @import("checks/thread/kernel.zig").run(&adapted, args, out) else result = @import("checks/thread/main.zig").r4_app_main(&adapted);
         }
         if (cli.same(group, "stack")) result = @import("checks/stack/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "simd")) result = @import("checks/simd/main.zig").r4_app_main(&adapted);
@@ -168,10 +177,13 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
         if (cli.same(group, "input")) result = @import("checks/input/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "network")) result = @import("checks/network/main.zig").r4_app_main(&adapted);
         if (cli.same(group, "ipc")) result = @import("checks/ipc/main.zig").r4_app_main(&adapted);
-
     }
     if (@atomicLoad(u8, &write_failed, .acquire) != 0) out.failed = true;
     if (line_length != 0) out.message("check", line[0..line_length], false);
-    out.record("result", group, 0, .{ .exit_code = result, .success = result == 0 });
+    // A successful private hold fixture must not leave a new sealed producer
+    // block borrowed by its parent's visible transcript after process Reap.
+    // Failures and every ordinary public check retain their result record.
+    if (!(result == 0 and cli.same(group, "LIFECYCLE") and cli.same(args, "/COMPUTEHOLD")))
+        out.record("result", group, 0, .{ .exit_code = result, .success = result == 0 });
     return result;
 }

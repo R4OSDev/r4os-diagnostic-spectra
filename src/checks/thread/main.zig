@@ -89,7 +89,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     var self_exit: i32 = 0;
     if (sys.threadJoin(main_id, 0, &self_exit) != r4os.abi.thread_error_self_join) return fail(&sys, "SPECTRA THREAD self join accepted");
     var invalid_id: u32 = 0;
-    if (sys.threadCreateRaw(workerMain, 1, 0, 1, &invalid_id) != r4os.abi.thread_error_unsupported) return fail(&sys, "SPECTRA THREAD invalid flags accepted");
+    if (sys.threadCreateRaw(workerMain, 1, 0, 0x80000000, &invalid_id) != r4os.abi.thread_error_unsupported) return fail(&sys, "SPECTRA THREAD invalid flags accepted");
 
     var worker = switch (resources.createThread(workerMain, 7, 0)) {
         .handle => |handle| handle,
