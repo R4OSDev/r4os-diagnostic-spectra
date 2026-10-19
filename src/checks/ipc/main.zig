@@ -1,4 +1,5 @@
 const r4os = @import("r4os");
+const std = @import("std");
 
 const request_id_restart: u32 = 0x53564352;
 const request_id_restart_test: u32 = 0x53564354;
@@ -38,11 +39,22 @@ pub fn r4_app_main(r4_app: *r4os.App) i32 {
         return runDriverLifecycleDiagnostic(&app);
     }
 
-    app.sys.println("Usage: SPECTRA IPC [STATUS|SELFTEST|RESTART|RESTARTTEST|DRIVERLIFETEST]");
+    app.sys.println("Usage: SPECTRA IPC [STATUS|SELFTEST|WORKERS|RESTART|RESTARTTEST|DRIVERLIFETEST]");
     return 1;
 }
 
 fn runWorkerProbe(app: *const App) i32 {
+    var own: r4os.abi.ProgramJoinHandle = .{};
+    if (app.sys.threadCurrentHandle(&own) != r4os.abi.thread_ok) return fail(app, "worker file identity missing");
+    var path_bytes: [96]u8 = undefined;
+    const path = std.fmt.bufPrintZ(&path_bytes, "C:\\TEMP\\IW{X:0>8}-{X:0>16}.BIN", .{ own.instance_id, own.instance_generation }) catch return fail(app, "worker file path");
+    if (app.sys.exists(path.ptr)) return fail(app, "worker file name already owned");
+    defer if (app.sys.exists(path.ptr)) {
+        _ = app.sys.fileDelete(path.ptr);
+    };
+    var data: [4096]u8 = undefined;
+    var restored: [4096]u8 = undefined;
+    for (&data, 0..) |*byte, i| byte.* = @truncate(i * 7 + 0x35);
     worker_probe_app = app.*;
     @atomicStore(bool, &worker_probe_done, false, .release);
     var thread: r4os.abi.ProgramJoinHandle = .{};
@@ -58,15 +70,21 @@ fn runWorkerProbe(app: *const App) i32 {
         if (@atomicLoad(bool, &worker_probe_done, .acquire)) break;
         app.sys.sleepTicks(1);
     }
+    // The real DNS handler remains pending while an independent file request
+    // and UDP channel complete. Always join it before returning, even on error.
+    const written = app.sys.fileWrite(path.ptr, &data);
+    const read_back = if (written == data.len) app.sys.fileRead(path.ptr, &restored) else 0;
+    const exact_file = read_back == data.len and std.mem.eql(u8, &data, &restored);
+    const removed = if (app.sys.exists(path.ptr)) app.sys.fileDelete(path.ptr) > 0 else false;
     var response: [r4os.abi.ipc_max_message_size]u8 = undefined;
     var status: i32 = 0;
     const payload = requestBackend(app, r4os.abi.ipc_channel_net_udp, r4os.abi.net_service_op_udp_status_result, 0x7809_0002, "", &response, &status);
-    const independent = observed and payload != null and status == r4os.abi.net_service_result_ok and
+    const independent = observed and exact_file and removed and payload != null and status == r4os.abi.net_service_result_ok and
         !@atomicLoad(bool, &worker_probe_done, .acquire);
     var code: i32 = -1;
     const joined = app.sys.threadHandleJoin(&thread, 6000, &code);
-    if (!independent or joined != r4os.abi.thread_ok or code != 0) return fail(app, "waiting DNS blocked independent UDP status");
-    app.sys.println("SPECTRA IPC workers: OK dns=waiting udp=completed join=OK");
+    if (!independent or joined != r4os.abi.thread_ok or code != 0) return fail(app, "waiting DNS/file/UDP concurrency or cleanup failed");
+    app.sys.println("SPECTRA IPC workers: OK dns=waiting udp=completed file=exact+deleted join=OK");
     return 0;
 }
 
