@@ -244,6 +244,27 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     if (hasArg(ctx.sys.argsRaw(), gui_raster_chain_hold_arg)) return guiRasterChainHold(&ctx);
     if (hasArg(ctx.sys.argsRaw(), gui_frame_hold_arg)) return guiFrameHold(&ctx);
     if (!ctx.dev.hasFn("memory_summary")) return fail(&ctx, "memory snapshot missing");
+    if (hasArg(ctx.sys.argsRaw(), "/APPS")) {
+        if (!warmParallelAppRegistry(&ctx)) return fail(&ctx, "apps registry warmup");
+        const scratch = ctx.sys.allocator().alloc(u8, 128 * 1024) catch return fail(&ctx, "apps caller buffer warmup");
+        ctx.sys.allocator().free(scratch);
+        ctx.sys.allocatorTrim();
+        const heap_before = ctx.sys.allocatorStats();
+        if (heap_before.active_allocations != 0) return fail(&ctx, "apps caller live buffers before");
+        const before = captureRuntimeBaseline(&ctx) orelse return 1;
+        if (!@import("normal_apps.zig").run(ctx.sys, ctx.desk, ctx.draw)) return 1;
+        // Release only this diagnostic's freed export-inspection buffers.
+        // Live child allocations still have to disappear through real Reap.
+        ctx.sys.allocatorTrim();
+        if (ctx.sys.allocatorStats().active_allocations != 0) return fail(&ctx, "apps caller live buffers after");
+        const after = captureRuntimeBaseline(&ctx) orelse return 1;
+        if (!sameTotals(before.resources, after.resources) or before.instance_count != after.instance_count or !sameStorageCurrent(before.storage, after.storage)) {
+            printBaselineDiff(&ctx, before, after);
+            return fail(&ctx, "apps owner baseline");
+        }
+        ctx.sys.println("SPECTRA LIFECYCLE apps owners/instances/payloads/frames restored: OK");
+        return 0;
+    }
     if (hasArg(ctx.sys.argsRaw(), dynamic_stress_arg)) {
         const quick = hasArg(ctx.sys.argsRaw(), dynamic_stress_quick_arg);
         if (!runDynamicExecutionStress(&ctx, quick)) return 1;
@@ -300,6 +321,79 @@ pub fn r4_app_main(app: *r4os.App) i32 {
 
     ctx.sys.println("SPECTRA LIFECYCLE result: OK");
     return 0;
+}
+
+fn warmParallelAppRegistry(ctx: *DiagApi) bool {
+    // The registry deliberately retains its first two16-slot chunks. Reach
+    // the actual six-GUI/two-console peak through normal attached launches.
+    // Quiet original hold fixtures avoid new parent transcript references.
+    const cold = captureRuntimeBaseline(ctx) orelse return false;
+    var children: [8]?r4os.ProcessHandle = .{null} ** 8;
+    defer for (&children) |*child| {
+        if (child.*) |*process| cleanupProcess(ctx, process);
+    };
+    const paths = [_][]const u8{
+        "C:\\R4OS\\SOFTWARE\\DESKTOP\\NOTEPAD.R4X", "C:\\R4OS\\SOFTWARE\\DESKTOP\\EXPLORER.R4X", "C:\\R4OS\\SOFTWARE\\DESKTOP\\LOGCENTER.R4X",
+    };
+    for (&children, 0..) |*child, index| {
+        var path = r4os.FilePath.parse(if (index < 6) paths[index / 2] else cleanup_path) catch return false;
+        child.* = switch (ctx.resources.spawn(path.asZ(), if (index < 6) "" else route.arguments("LIFECYCLE", dynamic_churn_hold_arg).ptr(), if (index < 6) .gui else .console)) {
+            .process => |process| process,
+            .failure => |code| return parallelAppWarmFailure(ctx, "spawn", index, code),
+        };
+        if (index < 6) {
+            const process = &child.*.?;
+            const window: r4os.abi.GuiWindowInfo = .{ .window_id = @intCast(index), .client_w = 840, .client_h = 500 };
+            if (ctx.desk.guiSetWindowInfo(process.raw, &window) != 0 or !attachHeadlessGui(ctx, process)) return parallelAppWarmFailure(ctx, "attach", index, -1);
+            const handle = processAbiHandle(process);
+            var tick: u32 = 0;
+            while (tick < 8000) : (tick += 1) {
+                var info: r4os.abi.GuiFrameInfo = .{};
+                if (ctx.draw.guiFrameInfo(&handle, &info) == r4os.abi.gui_frame_result_ok and info.committed_generation != 0 and info.committed_command_count != 0) break;
+                ctx.sys.sleepTicks(1);
+            }
+            if (tick == 8000) return parallelAppWarmFailure(ctx, "frame", index, -1);
+        }
+    }
+    for (&children, 0..) |*child, index| {
+        const process = if (child.*) |*value| value else return false;
+        const killed = process.kill();
+        if (killed != r4os.abi.program_handle_ok) return parallelAppWarmFailure(ctx, "kill", index, killed);
+        switch (process.wait(finiteTimeout(8000))) {
+            .exited => |code| if (code != -9) return parallelAppWarmFailure(ctx, "exit", index, code),
+            .failure => |code| return parallelAppWarmFailure(ctx, "wait", index, code),
+            else => return parallelAppWarmFailure(ctx, "wait-timeout", index, -1),
+        }
+    }
+    const warm = captureRuntimeBaseline(ctx) orelse return false;
+    if (!sameTotals(cold.resources, warm.resources) or cold.instance_count != warm.instance_count) {
+        printBaselineDiff(ctx, cold, warm);
+        return false;
+    }
+    // Only the source-defined bounded registry reservation may stay warm;
+    // live runtime/console/GUI/frame payloads must already match cold state.
+    if (warm.storage.registry_reserved_core_bytes < cold.storage.registry_reserved_core_bytes or
+        warm.storage.registry_reserved_core_bytes > 2 * cold.storage.registry_reserved_core_bytes) return parallelAppWarmFailure(ctx, "core-reservation", 0, -1);
+    var expected = cold.storage;
+    expected.reserved_instance_bytes += warm.storage.registry_reserved_core_bytes - cold.storage.registry_reserved_core_bytes;
+    expected.registry_reserved_core_bytes = warm.storage.registry_reserved_core_bytes;
+    if (!sameStorageCurrent(expected, warm.storage)) {
+        printBaselineDiff(ctx, cold, warm);
+        return false;
+    }
+    ctx.sys.println("SPECTRA LIFECYCLE apps registry warmup killed/reaped=8 cold payload/frame/VM owners restored: OK");
+    return true;
+}
+
+fn parallelAppWarmFailure(ctx: *DiagApi, stage: []const u8, index: usize, code: i32) bool {
+    ctx.sys.write("SPECTRA LIFECYCLE apps warmup FAILED stage=");
+    ctx.sys.write(stage);
+    ctx.sys.write(" index=");
+    ctx.sys.printU64(index);
+    ctx.sys.write(" code=");
+    ctx.sys.printI32(code);
+    ctx.sys.println("");
+    return false;
 }
 
 fn lifecycleForeground(ctx: *DiagApi) i32 {
@@ -4619,7 +4713,10 @@ fn testWatchCancellation(ctx: *DiagApi, standard: bool) i32 {
             }
         }
         var state: r4os.abi.ConsoleState = .{};
-        if (ctx.sys.consoleState(child.instance_id, &state) >= 0 and state.stdout_bytes != 0) { output_seen = true; break; }
+        if (ctx.sys.consoleState(child.instance_id, &state) >= 0 and state.stdout_bytes != 0) {
+            output_seen = true;
+            break;
+        }
         ctx.sys.sleepTicks(1);
     }
     if (!output_seen) return fail(ctx, "watch did not produce its first snapshot");
