@@ -33,10 +33,10 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     var result: i32 = 0;
     switch (request.command) {
         .help => output.message("help", "SPECTRA " ++ @import("spectra_version").value ++ " - kernel diagnostics\r\n" ++
-            "  METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|SMP|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE\r\n" ++
+            "  METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|SMP|CPUFEATURES|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE\r\n" ++
             "  LOGS BOOT|SERVICE\r\n" ++
             "  CHECK BOOT|PERFORMANCE|WORK|THREAD|SMP|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP|USB [options]\r\n" ++
-            "  CHECK SMP [/ADMISSION|/LIFECYCLE] (CPU/clock/TLB and logical offline/online checks)\r\n" ++
+            "  CHECK SMP [/ADMISSION|/LIFECYCLE|/FEATURES|/FEATURES-OFFLINE:n]\r\n" ++
             "  CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION] (bounded native checks)\r\n" ++
             "  CHECK THREAD /PLACEMENT (native CPU sets/work classes; requires 4 CPUs)\r\n" ++
             "  CHECK VM /AP (owned AP VM, paging, same/cross-volume file I/O; requires 4 CPUs)\r\n" ++

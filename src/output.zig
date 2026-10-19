@@ -141,14 +141,15 @@ pub const Output = struct {
                 if (json) self.write("}");
             },
             .int, .comptime_int => {
+                const value_unit = comptime unit(name);
                 const disabled = self.detail != null and !self.detail.? and detailField(group, name);
                 if (json) {
                     self.write("{\"value\":");
                     if (disabled) self.write("null") else { self.write("\""); self.number(data); self.write("\""); }
-                    self.write(",\"unit\":"); self.string(unit(name));
+                    self.write(",\"unit\":"); self.string(value_unit);
                     if (disabled) self.write(",\"unavailable\":\"detail-disabled\"");
                     self.write("}");
-                } else if (disabled) self.write("unavailable (detail disabled)") else { self.number(data); self.write(" "); self.write(unit(name)); }
+                } else if (disabled) self.write("unavailable (detail disabled)") else { self.number(data); self.write(" "); self.write(value_unit); }
             },
             .bool => self.write(if (data) "true" else "false"),
             .optional => if (data) |v| self.renderValue(group, name, v, json) else self.write("null"),
@@ -177,6 +178,15 @@ fn textField(comptime name: []const u8) bool {
 }
 
 fn unit(comptime name: []const u8) []const u8 {
+    // CPU catalogue frequencies are nominal MHz. Register/control masks and
+    // address/PMU bit widths must not inherit generic count/pixel/address units.
+    if (std.mem.endsWith(u8, name, "_mhz")) return "MHz";
+    if (std.mem.eql(u8, name, "pmu_counter_width") or std.mem.eql(u8, name, "physical_address_bits") or std.mem.eql(u8, name, "virtual_address_bits")) return "bits";
+    if (std.mem.eql(u8, name, "cr0") or std.mem.eql(u8, name, "cr4") or std.mem.eql(u8, name, "xcr0") or std.mem.eql(u8, name, "supported_xcr0") or std.mem.eql(u8, name, "efer") or std.mem.eql(u8, name, "pat") or std.mem.eql(u8, name, "raw_value") or std.mem.eql(u8, name, "control_value") or std.mem.eql(u8, name, "legacy_inventory_msr_faults")) return "bitmask";
+    if (std.mem.eql(u8, name, "capture_sequence") or std.mem.eql(u8, name, "max_basic_leaf") or std.mem.eql(u8, name, "max_extended_leaf") or std.mem.eql(u8, name, "max_hypervisor_leaf") or std.mem.eql(u8, name, "raw_hypervisor_maximum") or std.mem.eql(u8, name, "source_leaf") or std.mem.eql(u8, name, "source_subleaf")) return "identifier";
+    if (std.mem.eql(u8, name, "hardware_state") or std.mem.eql(u8, name, "os_state") or std.mem.eql(u8, name, "use_state") or std.mem.eql(u8, name, "source_register") or std.mem.eql(u8, name, "register_results")) return "code";
+    if (std.mem.eql(u8, name, "pmu_version")) return "version";
+    if (std.mem.eql(u8, name, "register_values")) return "raw";
     // Completed offline/online transitions are an operational event count,
     // independent of optional cycle-timing instrumentation.
     if (std.mem.eql(u8, name, "offline_cycles")) return "count";

@@ -21,5 +21,6 @@ pub fn collect(dev: *const r4os.r4dev.Context, out: *Output) bool {
     }
     out.record("smp_tlb", "smp", 0, report);
     out.message("smp", "Passive counters since boot; owner loads are not one atomic snapshot. No workload or historical check pass is implied.", false);
-    return @import("cpu_topology.zig").collect(dev, out);
+    const topology = @import("cpu_topology.zig").collect(dev, out);
+    return @import("cpu_capabilities.zig").collect(dev, out, false) and topology;
 }
