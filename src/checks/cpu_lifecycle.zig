@@ -206,6 +206,10 @@ fn consumers(dev: *const r4os.r4dev.Context, cpu: u32, out: *Output) bool {
     var cap_before: a.CpuCapabilitiesInfo = .{};
     if (has_mca and (dev.cpuMachineInfo(cpu, &mca_before) != 0 or mca_before.epoch != before.epoch or
         dev.cpuCapabilities(cpu, &cap_before) != 0 or cap_before.epoch != before.epoch)) return false;
+    const has_microcode = dev.hasFn("cpu_microcode_info");
+    var microcode_before: a.CpuMicrocodeInfo = .{};
+    if (has_microcode and (dev.cpuMicrocodeInfo(cpu, &microcode_before) != 0 or
+        microcode_before.epoch != before.epoch or microcode_before.write_attempts != 0)) return false;
     var guard = extern struct { info: a.CpuLifecycleInfo = .{}, tail: u64 = tail_value }{};
     guard.info.size = @sizeOf(@TypeOf(guard));
     const rc = dev.cpuLifecycle(a.cpu_lifecycle_op_offline, cpu, before.epoch, &guard.info);
@@ -224,6 +228,12 @@ fn consumers(dev: *const r4os.r4dev.Context, cpu: u32, out: *Output) bool {
         var cap_after: a.CpuCapabilitiesInfo = .{};
         if (dev.cpuCapabilities(cpu, &cap_after) != 0 or cap_after.epoch != cap_before.epoch or cap_after.recovered_msr_faults != cap_before.recovered_msr_faults) return false;
         out.record("cpu_lifecycle_mca_offline", "mca", cpu, .{ .passed = true, .passive = true, .cpu_index = cpu, .epoch = retained.epoch, .capture_sequence = retained.sequence, .banks_read = retained.stored_banks, .added_msr_faults = cap_after.recovered_msr_faults - cap_before.recovered_msr_faults, .snapshot_unchanged = true });
+    }
+    if (has_microcode) {
+        var retained: a.CpuMicrocodeInfo = .{};
+        if (dev.cpuMicrocodeInfo(cpu, &retained) != 0 or
+            !std.mem.eql(u8, std.mem.asBytes(&retained), std.mem.asBytes(&microcode_before))) return false;
+        out.record("cpu_lifecycle_microcode_offline", "microcode", cpu, .{ .passed = true, .passive = true, .cpu_index = cpu, .epoch = retained.epoch, .capture_sequence = retained.sequence, .snapshot_unchanged = true, .update_trigger_attempts = retained.write_attempts });
     }
     // The ordinary notification, true join, module SIMD continuation and real
     // read-only device completion must progress with this AP still offline.
@@ -246,6 +256,13 @@ fn consumers(dev: *const r4os.r4dev.Context, cpu: u32, out: *Output) bool {
         var fresh: a.CpuMachineInfo = .{};
         if (dev.cpuMachineInfo(cpu, &fresh) != 0 or fresh.epoch != online.epoch or fresh.sequence <= mca_before.sequence) return false;
         out.record("cpu_lifecycle_mca_online", "mca", cpu, .{ .passed = true, .cpu_index = cpu, .epoch = fresh.epoch, .capture_sequence = fresh.sequence, .old_epoch = mca_before.epoch, .old_capture_sequence = mca_before.sequence });
+    }
+    if (has_microcode and online_rc == a.cpu_lifecycle_ok) {
+        var fresh: a.CpuMicrocodeInfo = .{};
+        if (dev.cpuMicrocodeInfo(cpu, &fresh) != 0 or fresh.epoch != online.epoch or
+            fresh.sequence <= microcode_before.sequence or fresh.write_attempts != 0 or
+            fresh.flags & a.cpu_microcode_flag_initial_boot != 0 or fresh.flags & a.cpu_microcode_flag_post_baseline == 0) return false;
+        out.record("cpu_lifecycle_microcode_online", "microcode", cpu, .{ .passed = true, .cpu_index = cpu, .epoch = fresh.epoch, .capture_sequence = fresh.sequence, .old_epoch = microcode_before.epoch, .old_capture_sequence = microcode_before.sequence, .update_trigger_attempts = fresh.write_attempts, .runtime_update = false });
     }
     return io_ok and online_rc == a.cpu_lifecycle_ok and online.state == a.cpu_lifecycle_state_online and online.epoch == before.epoch + 1 and
         online.installed_epoch == online.epoch and online.available_cpus == before.available_cpus and online.capacity_generation > before.capacity_generation;

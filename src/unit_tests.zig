@@ -1,5 +1,6 @@
 comptime {
     _ = @import("mca_decode.zig");
+    _ = @import("microcode_decode.zig");
     _ = @import("cli.zig");
     _ = @import("route.zig");
     _ = @import("checks/performance/measurement.zig");

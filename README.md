@@ -2,6 +2,18 @@
 
 Spectra is R4OS's console tool for kernel measurements, kernel logs, functional checks and explicit benchmarks. It runs through Terminal and SSH. A GUI is deferred; command parsing, collectors/checks and rendering are separate.
 
+Since0.1.38, `METRICS MICROCODE [/JSON]` copies retained early CPU revision
+receipts. `CHECK SMP /MICROCODE` runs15 synthetic presentation cases and
+passive header, caller-tail and exact CPU/epoch checks. The existing owned
+lifecycle check verifies an unchanged complete receipt while offline and a
+fresh receipt after restart, with zero runtime update attempts. Queries
+never load firmware or issue hardware instructions. Virtual revisions and
+supplied firmware are separate from confirmed native update readback;
+unavailable revisions remain null, distinct from valid0. CPUID fingerprints
+are diagnostic; the existing PAT/FPU/module owners decide CPU admission.
+Original Suite3 workloads/reference remain unchanged. Profiles and physical
+qualification limits: `Docs/Core/CpuMicrocode08533.txt`.
+
 ```
 SPECTRA METRICS CLOCK
 SPECTRA METRICS ALL /JSON /EXPORT:C:\TEMP\KERNEL.JSON
