@@ -11,7 +11,7 @@ var sys: r4os.r4sys.Context = undefined;
 var dev: r4os.r4dev.Context = undefined;
 var gate: Atomic = .init(0);
 var done: Atomic = .init(0);
-const Job = struct { first: a.CpuPowerInfo = .{}, second: a.CpuPowerInfo = .{}, checks: u32 = 0, rejected_registers: u32 = 0, checksum: u64 = 0 };
+const Job = struct { first: a.CpuPowerInfo = .{}, second: a.CpuPowerInfo = .{}, performance: a.CpuPerformanceInfo = .{}, checks: u32 = 0, rejected_registers: u32 = 0, performance_checks: u32 = 0, checksum: u64 = 0 };
 var job: Job = .{};
 fn now() u64 {
     return sys.monotonicNanoseconds() orelse 0;
@@ -42,6 +42,39 @@ fn cases(cpu: u32) i32 {
     if (!current(cpu)) return 11;
     var cap: a.CpuCapabilitiesInfo = .{};
     if (dev.cpuCapabilities(cpu, &cap) != 0) return 12;
+    // Explicit inspection is read-only. Normal diagnostics never enable HWP
+    // or change an actual local request, even on supported native hardware.
+    var performance = extern struct { value: a.CpuPerformanceInfo = .{}, tail: u64 = sentinel }{};
+    performance.value.size = @sizeOf(@TypeOf(performance));
+    var request: a.CpuPerformanceRequest = .{ .cpu_index = cpu, .epoch = cap.epoch };
+    if (dev.cpuPerformance(&request, &performance.value) != 0 or performance.tail != sentinel or
+        performance.value.size != @sizeOf(a.CpuPerformanceInfo) or performance.value.cpu_index != cpu or
+        performance.value.epoch != cap.epoch or performance.value.provider_generation == 0) return 24;
+    job.performance = performance.value;
+    job.performance_checks += 1;
+    const unchanged = performance.value;
+    request.reserved0 = 1;
+    if (dev.cpuPerformance(&request, &performance.value) != a.cpu_capabilities_error_invalid or
+        !equal(a.CpuPerformanceInfo, unchanged, performance.value) or performance.tail != sentinel) return 25;
+    request.reserved0 = 0;
+    request.epoch = if (cap.epoch < std.math.maxInt(u64)) cap.epoch + 1 else cap.epoch - 1;
+    if (dev.cpuPerformance(&request, &performance.value) != a.cpu_capabilities_error_epoch or
+        !equal(a.CpuPerformanceInfo, unchanged, performance.value)) return 26;
+    request.epoch = cap.epoch;
+    if (cap.flags & a.cpu_capabilities_flag_hypervisor_present != 0) {
+        if (unchanged.state != a.cpu_performance_state_unsupported or unchanged.valid_mask != 0 or
+            unchanged.lease != 0 or unchanged.flags & a.cpu_performance_flag_virtual == 0) return 27;
+        request.operation = a.cpu_performance_op_apply;
+        request.minimum = 10;
+        request.maximum = 200;
+        if (dev.cpuPerformance(&request, &performance.value) != a.cpu_capabilities_error_unsupported or
+            !equal(a.CpuPerformanceInfo, unchanged, performance.value)) return 28;
+        request = .{ .cpu_index = cpu, .epoch = cap.epoch, .operation = a.cpu_performance_op_enable, .flags = a.cpu_performance_request_flag_sticky_enable };
+        if (dev.cpuPerformance(&request, &performance.value) != a.cpu_capabilities_error_unsupported or
+            !equal(a.CpuPerformanceInfo, unchanged, performance.value)) return 29;
+        job.performance_checks += 2;
+    }
+    job.performance_checks += 2;
     for (0..2) |index| {
         var value: a.CpuPowerInfo = .{ .sequence = sentinel };
         if (index == 0) value.version = 0 else value.size -= 1;
@@ -69,7 +102,7 @@ fn cases(cpu: u32) i32 {
             job.second.valid_mask != 0 or job.first.valid_mask != 0 or job.second.unsupported_mask != 0xfff) return 17;
         // Real VM calls prove every new model gate refuses before instruction.
         // They never promote an ignored/zero MSR to a physical sensor.
-        for (8..18) |id| {
+        for (8..22) |id| {
             var raw: a.CpuRegisterInfo = .{ .value = sentinel };
             const before = raw;
             if (dev.cpuRegisterRead(cpu, cap.epoch, @intCast(id), &raw) != a.cpu_capabilities_error_unsupported or !equal(a.CpuRegisterInfo, before, raw)) return 18;
@@ -112,7 +145,7 @@ fn worker(raw: u64) callconv(.c) i32 {
 pub fn run(app: *r4os.App, out: *Output) i32 {
     sys = app.system();
     dev = app.devicesLowLevel() orelse return 2;
-    inline for (.{ "cpu_power_info", "cpu_power_capture", "cpu_capabilities", "cpu_register_read" }) |name| if (!dev.hasFn(name)) return 2;
+    inline for (.{ "cpu_power_info", "cpu_power_capture", "cpu_performance", "cpu_capabilities", "cpu_register_read" }) |name| if (!dev.hasFn(name)) return 2;
     var first: a.CpuCapabilitiesInfo = .{};
     if (dev.cpuCapabilities(0, &first) != 0 or first.configured_cpus == 0 or first.configured_cpus > 64) return 2;
     var created: u32 = 0;
@@ -153,7 +186,7 @@ pub fn run(app: *r4os.App, out: *Output) i32 {
             while (true) sys.sleepTicks(1);
         }
         reaped += 1;
-        out.record("cpu_power_check", "cpu_power", index, .{ .result = code, .prepared = prepared, .checks = job.checks, .rejected_registers = job.rejected_registers, .first = job.first, .second = job.second, .checksum = job.checksum });
+        out.record("cpu_power_check", "cpu_power", index, .{ .result = code, .prepared = prepared, .checks = job.checks, .rejected_registers = job.rejected_registers, .performance_checks = job.performance_checks, .performance = job.performance, .first = job.first, .second = job.second, .checksum = job.checksum });
         if (!prepared or code != 0 or done.load(.acquire) == 0) {
             out.message("cpu_power", "SPECTRA CPUPOWER: FAILED", false);
             return 1;
@@ -162,6 +195,6 @@ pub fn run(app: *r4os.App, out: *Output) i32 {
     }
     if (created == 0) return 2;
     out.record("cpu_power_completed", "cpu_power", 0, .{ .configured_cpus = first.configured_cpus, .available_cpus = created, .created = created, .reaped = reaped, .captures = created * 2, .atomic_across_cpus = false });
-    out.message("cpu_power", "SPECTRA CPUPOWER: ok (two local captures per CPU, exact epochs, passive cache, unavailable VM sensors, actual joins)", false);
+    out.message("cpu_power", "SPECTRA CPUPOWER: ok (two local captures per CPU, exact epochs, passive cache, HWP inspection/refusals, unavailable VM sensors, actual joins)", false);
     return 0;
 }
