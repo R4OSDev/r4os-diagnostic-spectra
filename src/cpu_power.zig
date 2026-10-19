@@ -59,6 +59,25 @@ pub fn collect(dev: r4os.r4dev.Context, sys: r4os.r4sys.Context, out: *Output) b
             return false;
         }
         record(out, value, sys.monotonicNanoseconds());
+        if (dev.hasFn("cpu_performance_hint")) {
+            var hint: a.CpuPerformanceHintInfo = .{};
+            if (dev.cpuPerformanceHint(@intCast(index), cap.epoch, &hint) != 0) return false;
+            const valid = hint.flags & a.cpu_performance_hint_flag_valid != 0;
+            out.record("cpu_performance_hint", "cpu_performance_hint", index, .{
+                .state = hint.state,
+                .epoch = hint.epoch,
+                .provider_generation = hint.provider_generation,
+                .sequence = hint.sequence,
+                .rank = if (valid) @as(?u32, hint.rank) else null,
+                .scale = if (valid) @as(?u32, hint.scale) else null,
+                .scope_mask = hint.scope_mask,
+                .core_mask = hint.core_mask,
+                .group_ready = hint.flags & a.cpu_performance_hint_flag_group_ready != 0,
+                .captured_ns = if (valid) @as(?u64, hint.captured_ns) else null,
+                .expires_ns = if (valid) @as(?u64, hint.expires_ns) else null,
+                .note = @as([]const u8, "unitless sampled performance ordering, maximum age1s; no frequency, capacity, efficiency or placement guarantee"),
+            });
+        }
     }
     return true;
 }

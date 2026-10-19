@@ -11,7 +11,7 @@ var sys: r4os.r4sys.Context = undefined;
 var dev: r4os.r4dev.Context = undefined;
 var gate: Atomic = .init(0);
 var done: Atomic = .init(0);
-const Job = struct { first: a.CpuPowerInfo = .{}, second: a.CpuPowerInfo = .{}, performance: a.CpuPerformanceInfo = .{}, checks: u32 = 0, rejected_registers: u32 = 0, performance_checks: u32 = 0, checksum: u64 = 0 };
+const Job = struct { first: a.CpuPowerInfo = .{}, second: a.CpuPowerInfo = .{}, performance: a.CpuPerformanceInfo = .{}, checks: u32 = 0, rejected_registers: u32 = 0, performance_checks: u32 = 0, cppc_checks: u32 = 0, cppc: a.CpuCppcInfo = .{}, hint: a.CpuPerformanceHintInfo = .{}, checksum: u64 = 0 };
 var job: Job = .{};
 fn now() u64 {
     return sys.monotonicNanoseconds() orelse 0;
@@ -75,6 +75,45 @@ fn cases(cpu: u32) i32 {
         job.performance_checks += 2;
     }
     job.performance_checks += 2;
+    // CPPC has its own typed AMD receipt. This diagnostic never enables or
+    // writes performance parameters; VM refusal is checked before instructions.
+    var cppc = extern struct { value: a.CpuCppcInfo = .{}, tail: u64 = sentinel }{};
+    cppc.value.size = @sizeOf(@TypeOf(cppc));
+    request = .{ .cpu_index = cpu, .epoch = cap.epoch };
+    if (dev.cpuCppc(&request, &cppc.value) != 0 or cppc.tail != sentinel or cppc.value.size != @sizeOf(a.CpuCppcInfo) or
+        cppc.value.cpu_index != cpu or cppc.value.epoch != cap.epoch or cppc.value.provider_generation == 0) return 30;
+    job.cppc = cppc.value;
+    const unchanged_cppc = cppc.value;
+    request.reserved0 = 1;
+    if (dev.cpuCppc(&request, &cppc.value) != a.cpu_capabilities_error_invalid or !equal(a.CpuCppcInfo, unchanged_cppc, cppc.value)) return 31;
+    request.reserved0 = 0;
+    request.epoch = if (cap.epoch < std.math.maxInt(u64)) cap.epoch + 1 else cap.epoch - 1;
+    if (dev.cpuCppc(&request, &cppc.value) != a.cpu_capabilities_error_epoch or !equal(a.CpuCppcInfo, unchanged_cppc, cppc.value)) return 32;
+    request.epoch = cap.epoch;
+    job.cppc_checks += 3;
+    if (cap.flags & a.cpu_capabilities_flag_hypervisor_present != 0) {
+        if (unchanged_cppc.state != a.cpu_performance_state_unsupported or unchanged_cppc.valid_mask != 0 or unchanged_cppc.raw_valid_mask != 0 or
+            unchanged_cppc.lease != 0 or unchanged_cppc.hint_sequence != 0 or unchanged_cppc.flags & a.cpu_performance_flag_virtual == 0) return 33;
+        request.operation = a.cpu_performance_op_apply;
+        request.minimum = 10;
+        request.maximum = 200;
+        if (dev.cpuCppc(&request, &cppc.value) != a.cpu_capabilities_error_unsupported or !equal(a.CpuCppcInfo, unchanged_cppc, cppc.value)) return 34;
+        request = .{ .cpu_index = cpu, .epoch = cap.epoch, .operation = a.cpu_performance_op_enable, .flags = a.cpu_performance_request_flag_sticky_enable };
+        if (dev.cpuCppc(&request, &cppc.value) != a.cpu_capabilities_error_unsupported or !equal(a.CpuCppcInfo, unchanged_cppc, cppc.value)) return 35;
+        job.cppc_checks += 2;
+    }
+    var hint = extern struct { value: a.CpuPerformanceHintInfo = .{}, tail: u64 = sentinel }{};
+    hint.value.size = @sizeOf(@TypeOf(hint));
+    if (dev.cpuPerformanceHint(cpu, cap.epoch, &hint.value) != 0 or hint.tail != sentinel or hint.value.size != @sizeOf(a.CpuPerformanceHintInfo) or
+        hint.value.cpu_index != cpu or hint.value.epoch != cap.epoch) return 36;
+    job.hint = hint.value;
+    const saved_hint = hint.value;
+    const wrong_epoch = if (cap.epoch < std.math.maxInt(u64)) cap.epoch + 1 else cap.epoch - 1;
+    if (dev.cpuPerformanceHint(cpu, wrong_epoch, &hint.value) != a.cpu_capabilities_error_epoch or !equal(a.CpuPerformanceHintInfo, saved_hint, hint.value) or
+        hint.tail != sentinel) return 37;
+    if (cap.flags & a.cpu_capabilities_flag_hypervisor_present != 0 and
+        (saved_hint.state != a.cpu_performance_hint_state_unknown or saved_hint.flags != 0 or saved_hint.rank != 0 or saved_hint.sequence != 0)) return 38;
+    job.cppc_checks += 2;
     for (0..2) |index| {
         var value: a.CpuPowerInfo = .{ .sequence = sentinel };
         if (index == 0) value.version = 0 else value.size -= 1;
@@ -102,7 +141,7 @@ fn cases(cpu: u32) i32 {
             job.second.valid_mask != 0 or job.first.valid_mask != 0 or job.second.unsupported_mask != 0xfff) return 17;
         // Real VM calls prove every new model gate refuses before instruction.
         // They never promote an ignored/zero MSR to a physical sensor.
-        for (8..22) |id| {
+        for (8..27) |id| {
             var raw: a.CpuRegisterInfo = .{ .value = sentinel };
             const before = raw;
             if (dev.cpuRegisterRead(cpu, cap.epoch, @intCast(id), &raw) != a.cpu_capabilities_error_unsupported or !equal(a.CpuRegisterInfo, before, raw)) return 18;
@@ -145,7 +184,7 @@ fn worker(raw: u64) callconv(.c) i32 {
 pub fn run(app: *r4os.App, out: *Output) i32 {
     sys = app.system();
     dev = app.devicesLowLevel() orelse return 2;
-    inline for (.{ "cpu_power_info", "cpu_power_capture", "cpu_performance", "cpu_capabilities", "cpu_register_read" }) |name| if (!dev.hasFn(name)) return 2;
+    inline for (.{ "cpu_power_info", "cpu_power_capture", "cpu_performance", "cpu_cppc", "cpu_performance_hint", "cpu_capabilities", "cpu_register_read" }) |name| if (!dev.hasFn(name)) return 2;
     var first: a.CpuCapabilitiesInfo = .{};
     if (dev.cpuCapabilities(0, &first) != 0 or first.configured_cpus == 0 or first.configured_cpus > 64) return 2;
     var created: u32 = 0;
@@ -186,7 +225,7 @@ pub fn run(app: *r4os.App, out: *Output) i32 {
             while (true) sys.sleepTicks(1);
         }
         reaped += 1;
-        out.record("cpu_power_check", "cpu_power", index, .{ .result = code, .prepared = prepared, .checks = job.checks, .rejected_registers = job.rejected_registers, .performance_checks = job.performance_checks, .performance = job.performance, .first = job.first, .second = job.second, .checksum = job.checksum });
+        out.record("cpu_power_check", "cpu_power", index, .{ .result = code, .prepared = prepared, .checks = job.checks, .rejected_registers = job.rejected_registers, .performance_checks = job.performance_checks, .performance = job.performance, .cppc_checks = job.cppc_checks, .cppc = job.cppc, .hint = job.hint, .first = job.first, .second = job.second, .checksum = job.checksum });
         if (!prepared or code != 0 or done.load(.acquire) == 0) {
             out.message("cpu_power", "SPECTRA CPUPOWER: FAILED", false);
             return 1;
@@ -195,6 +234,6 @@ pub fn run(app: *r4os.App, out: *Output) i32 {
     }
     if (created == 0) return 2;
     out.record("cpu_power_completed", "cpu_power", 0, .{ .configured_cpus = first.configured_cpus, .available_cpus = created, .created = created, .reaped = reaped, .captures = created * 2, .atomic_across_cpus = false });
-    out.message("cpu_power", "SPECTRA CPUPOWER: ok (two local captures per CPU, exact epochs, passive cache, HWP inspection/refusals, unavailable VM sensors, actual joins)", false);
+    out.message("cpu_power", "SPECTRA CPUPOWER: ok (two local captures per CPU, exact epochs, passive cache, HWP/CPPC inspection/refusals and cached ranks, unavailable VM sensors, actual joins)", false);
     return 0;
 }
