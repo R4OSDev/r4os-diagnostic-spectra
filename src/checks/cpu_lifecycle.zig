@@ -201,6 +201,11 @@ fn consumers(dev: *const r4os.r4dev.Context, cpu: u32, out: *Output) bool {
         !placement(&handles[1], cpu, false) or !adopted(&handles[1], cpu, false) or !blocked(&handles[1])) return false;
     var before: a.CpuLifecycleInfo = .{};
     if (!query(dev, cpu, &before)) return false;
+    const has_mca = dev.hasFn("cpu_machine_info") and dev.hasFn("cpu_machine_bank");
+    var mca_before: a.CpuMachineInfo = .{};
+    var cap_before: a.CpuCapabilitiesInfo = .{};
+    if (has_mca and (dev.cpuMachineInfo(cpu, &mca_before) != 0 or mca_before.epoch != before.epoch or
+        dev.cpuCapabilities(cpu, &cap_before) != 0 or cap_before.epoch != before.epoch)) return false;
     var guard = extern struct { info: a.CpuLifecycleInfo = .{}, tail: u64 = tail_value }{};
     guard.info.size = @sizeOf(@TypeOf(guard));
     const rc = dev.cpuLifecycle(a.cpu_lifecycle_op_offline, cpu, before.epoch, &guard.info);
@@ -209,6 +214,17 @@ fn consumers(dev: *const r4os.r4dev.Context, cpu: u32, out: *Output) bool {
     if (rc != a.cpu_lifecycle_ok or guard.tail != tail_value or guard.info.state != a.cpu_lifecycle_state_offline or
         guard.info.available_cpus + 1 != before.available_cpus or guard.info.tasks_migrated < 2 or
         guard.info.parked_epoch != before.epoch or guard.info.stopped_epoch != before.epoch or guard.info.irq_epoch != before.epoch) return false;
+    if (has_mca) {
+        var retained: a.CpuMachineInfo = .{};
+        if (dev.cpuMachineInfo(cpu, &retained) != 0 or !std.mem.eql(u8, std.mem.asBytes(&retained), std.mem.asBytes(&mca_before)) or retained.stored_banks > a.cpu_machine_bank_limit) return false;
+        for (0..retained.stored_banks) |bank_index| {
+            var bank: a.CpuMachineBank = .{};
+            if (dev.cpuMachineBank(cpu, retained.epoch, retained.sequence, @intCast(bank_index), &bank) != 0 or bank.cpu_index != cpu or bank.epoch != retained.epoch or bank.sequence != retained.sequence or bank.bank_index != bank_index) return false;
+        }
+        var cap_after: a.CpuCapabilitiesInfo = .{};
+        if (dev.cpuCapabilities(cpu, &cap_after) != 0 or cap_after.epoch != cap_before.epoch or cap_after.recovered_msr_faults != cap_before.recovered_msr_faults) return false;
+        out.record("cpu_lifecycle_mca_offline", "mca", cpu, .{ .passed = true, .passive = true, .cpu_index = cpu, .epoch = retained.epoch, .capture_sequence = retained.sequence, .banks_read = retained.stored_banks, .added_msr_faults = cap_after.recovered_msr_faults - cap_before.recovered_msr_faults, .snapshot_unchanged = true });
+    }
     // The ordinary notification, true join, module SIMD continuation and real
     // read-only device completion must progress with this AP still offline.
     release.store(1, .release);
@@ -226,6 +242,11 @@ fn consumers(dev: *const r4os.r4dev.Context, cpu: u32, out: *Output) bool {
     online_attempted = true;
     const online_rc = dev.cpuLifecycle(a.cpu_lifecycle_op_online, cpu, before.epoch, &online);
     out.record("cpu_lifecycle_online", "smp", 0, .{ .result = online_rc, .info = online });
+    if (has_mca and online_rc == a.cpu_lifecycle_ok) {
+        var fresh: a.CpuMachineInfo = .{};
+        if (dev.cpuMachineInfo(cpu, &fresh) != 0 or fresh.epoch != online.epoch or fresh.sequence <= mca_before.sequence) return false;
+        out.record("cpu_lifecycle_mca_online", "mca", cpu, .{ .passed = true, .cpu_index = cpu, .epoch = fresh.epoch, .capture_sequence = fresh.sequence, .old_epoch = mca_before.epoch, .old_capture_sequence = mca_before.sequence });
+    }
     return io_ok and online_rc == a.cpu_lifecycle_ok and online.state == a.cpu_lifecycle_state_online and online.epoch == before.epoch + 1 and
         online.installed_epoch == online.epoch and online.available_cpus == before.available_cpus and online.capacity_generation > before.capacity_generation;
 }

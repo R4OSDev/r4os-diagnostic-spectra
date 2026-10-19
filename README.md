@@ -95,3 +95,23 @@ request generations and completion receipts, drains before unregistering all
 three own controller registrations, and retains unacknowledged resources.
 It selects no physical test disk and performs no global queue/counter reset.
 METRICS stays passive; default STORAGE checks retain their existing selection.
+
+Since0.1.37, `METRICS MCA [/JSON]` copies bounded resident boot-passive or
+terminal Machine Check evidence. `CHECK SMP /MCA` adds22 synthetic decoder
+fixtures and actual passive header/epoch/sequence/tail checks; it injects no
+hardware error. Each raw/decoded row keeps exact CPU/start epoch/capture/bank
+identity. Global RIPV/EIPV/MCIP and bank VAL/ADDRV/MISCV, read faults, changed
+readbacks and truncation remain explicit. A retained boot scan is not current
+hardware health. Corrected records, uncorrected/deferred errors and corrupt
+contexts are distinct. AMD SMCA extended decoding initially requires the
+documented19h/01h/B1 profile and per-bank McaX; IPID determines block type,
+never the bank ordinal. Virtual model information does not identify a failing
+physical block. SYND priority matching is separate from raw capture. Unknown
+models/fields stay unknown. No query clears status or promises general repair.
+Suite3 workloads, fixed reference and measurement method remain unchanged.
+Unqualified AMD legacy extended status stays unknown when UC is clear;
+Deferred/TCC/Poison names require the exact SMCA model. The displayed MCE
+enable state is captured CR4.MCE only, not global/bank reporting activation.
+The existing owned CPU lifecycle check also copies the exact retained MCA
+snapshot while its AP is proven offline and verifies a fresh capture after
+restart, without additional register operations or extra manual transitions.

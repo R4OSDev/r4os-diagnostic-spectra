@@ -152,6 +152,7 @@ pub const Output = struct {
                 } else if (disabled) self.write("unavailable (detail disabled)") else { self.number(data); self.write(" "); self.write(value_unit); }
             },
             .bool => self.write(if (data) "true" else "false"),
+            .@"enum" => if (json) self.string(@tagName(data)) else self.write(@tagName(data)),
             .optional => if (data) |v| self.renderValue(group, name, v, json) else self.write("null"),
             .array => |info| {
                 if (info.child == u8 and (comptime textField(name))) {
