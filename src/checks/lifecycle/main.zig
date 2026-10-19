@@ -1513,8 +1513,8 @@ fn lifecycleClientWorkersReady(ctx: *DiagApi, instance_id: u32) bool {
     const length = ctx.desk.consoleOutput(instance_id, output[0..]);
     if (length <= 0) return false;
     const used: usize = @intCast(@min(length, @as(i32, @intCast(output.len))));
-    return containsBytes(output[0..used], "ASYNIOD lifecycle workers=3 ready=OK") and
-        (!hasArg(ctx.sys.argsRaw(), "/ASYNCQUICK") or containsBytes(output[0..used], "ASYNIOD KILLPOOL submitted=8"));
+    return containsBytes(output[0..used], "SPECTRA ASYNC_IO lifecycle workers=3 ready=OK") and
+        (!hasArg(ctx.sys.argsRaw(), "/ASYNCQUICK") or containsBytes(output[0..used], "SPECTRA ASYNC_IO KILLPOOL submitted=8"));
 }
 
 fn formatLifecycleKillWaitArgs(service_handle: u32, out: *[40:0]u8) [*:0]const u8 {

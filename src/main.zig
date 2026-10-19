@@ -39,6 +39,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "  CHECK SMP [/ADMISSION] (functional CPU/clock/remote-TLB checks)\r\n" ++
             "  CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION] (bounded native checks)\r\n" ++
             "  CHECK THREAD /PLACEMENT (native CPU sets/work classes; requires 4 CPUs)\r\n" ++
+            "  CHECK VM /AP (owned AP VM, paging, same/cross-volume file I/O; requires 4 CPUs)\r\n" ++
             "  CHECK MEMORY /KERNELHEAP (bounded kernel allocator cases and own cleanup)\r\n" ++
             "  CHECK STORAGE /BLOCKQUEUE[:ADMISSION] (owned synthetic blockqueue cases)\r\n" ++
             "  CHECK STORAGE /NVMEIRQ (one read-only exact IRQ/completion proof)\r\n" ++

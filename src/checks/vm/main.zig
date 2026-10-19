@@ -15,6 +15,7 @@ const DiagApi = struct {
 };
 
 pub fn r4_app_main(app: *r4os.App) i32 {
+    if (argsEqual(app.args(), "/AP")) return @import("ap.zig").run(app);
     var ctx = DiagApi.init(app) orelse return r4os.abi.err_no_group;
     if (argsEqual(app.args(), "/HOLDVM")) return holdVmMode(&ctx);
     if (app.args().len != 0) return 2;
@@ -153,4 +154,3 @@ fn argsEqual(args: []const u8, expected: []const u8) bool {
 fn upperAscii(ch: u8) u8 {
     return if (ch >= 'a' and ch <= 'z') ch - 32 else ch;
 }
-
