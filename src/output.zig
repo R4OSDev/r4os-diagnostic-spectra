@@ -178,6 +178,14 @@ fn textField(comptime name: []const u8) bool {
 }
 
 fn unit(comptime name: []const u8) []const u8 {
+    if (std.mem.eql(u8, name, "temperature_millic")) return "mdegC";
+    if (std.mem.endsWith(u8, name, "_uj")) return "uJ";
+    if (std.mem.endsWith(u8, name, "energy_bits")) return "bits";
+    if (std.mem.eql(u8, name, "aperf") or std.mem.eql(u8, name, "mperf")) return "core-cycles";
+    if (std.mem.eql(u8, name, "valid_mask") or std.mem.eql(u8, name, "fault_mask") or std.mem.eql(u8, name, "unsupported_mask") or std.mem.eql(u8, name, "package_mask") or std.mem.eql(u8, name, "core_mask") or std.mem.eql(u8, name, "thermal_current") or std.mem.eql(u8, name, "thermal_history")) return "bitmask";
+    if (std.mem.eql(u8, name, "raw_microcode") or std.mem.eql(u8, name, "raw_thermal_status") or std.mem.eql(u8, name, "raw_temperature_target") or std.mem.eql(u8, name, "raw_energy_unit") or std.mem.eql(u8, name, "raw_reference") or std.mem.endsWith(u8, name, "energy_raw")) return "raw";
+    if (std.mem.eql(u8, name, "microcode_revision")) return "identifier";
+    if (std.mem.eql(u8, name, "profile")) return "code";
     // CPU catalogue frequencies are nominal MHz. Register/control masks and
     // address/PMU bit widths must not inherit generic count/pixel/address units.
     if (std.mem.endsWith(u8, name, "_mhz")) return "MHz";
