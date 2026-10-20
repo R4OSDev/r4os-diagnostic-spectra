@@ -37,6 +37,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "  LOGS BOOT|SERVICE\r\n" ++
             "  CHECK BOOT|PERFORMANCE|WORK|THREAD|SMP|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP|USB [options]\r\n" ++
             "  CHECK SMP [/ADMISSION|/LIFECYCLE|/POWER|/FEATURES|/FEATURES-OFFLINE:n|/MCA|/MICROCODE|/PMU|/ACCEL|/ENTROPY|/ENTROPY-NONE]\r\n" ++
+            "  CHECK TEXT /CODECS (strict imported legacy/UTF-8 and exact document bytes)\r\n" ++
             "  CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION] (bounded native checks)\r\n" ++
             "  CHECK THREAD /PLACEMENT (native CPU sets/work classes; requires 4 CPUs)\r\n" ++
             "  CHECK VM /AP (owned AP VM, paging, same/cross-volume file I/O; requires 4 CPUs)\r\n" ++

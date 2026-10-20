@@ -98,6 +98,10 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     const group = request.group();
     var args_buffer: [1024:0]u8 = undefined;
     var args = request.args();
+    if (request.command == .check and cli.same(group, "TEXT")) {
+        if (!cli.same(args, "/CODECS")) return 2;
+        return @import("text_codecs.zig").run(app, out);
+    }
     if (request.command == .bench) {
         if (cli.same(group, "PMU")) {
             if (args.len != 0) return 2;
