@@ -1,14 +1,11 @@
 const r4os = @import("r4os");
+const observed = @import("observed.zig");
 
-// SPECTRA SIMD (0.56.30): SIMD-Verschraenkungstest fuer die Lazy-FPU-Abnahme.
-// Zwei R4X-Threads iterieren Vektorketten (@Vector(8, u32), bei AVX2 in
-// YMM-Registern) und schlafen zwischen den Runden, damit der Scheduler
-// zwischen beiden (und den Kernel-Tasks) wechselt. Jeder State-Verlust
-// im Save/Restore-Pfad macht die Endsumme bitfalsch.
-// /DYNAMICTASKS faehrt zusaetzlich zwei vollstaendig gejointe/reapte Wellen.
-// Die erste hinterlaesst einen vergifteten, aber gueltigen MXCSR-Control-
-// State; die zweite muss sauber und mit einem getrennten Seed-Satz starten.
-
+// Ordinary sleep-at-call-boundary vector chains check numerical interleaving.
+// SysV permits XMM/YMM clobbers at those calls; they are not proof of registers
+// kept live across them. /IRQSTRESS and /REGISTERS use complete assembly
+// bursts and exact native-task/RIP event metadata. /DYNAMICTASKS retains
+// its two fully joined/reaped waves and valid MXCSR-control reuse oracle.
 
 const rounds: u32 = 400;
 const Vec = @Vector(8, u32);
@@ -69,29 +66,6 @@ fn chainScalarRounds(seed: u32, round_count: u32) u64 {
     return acc;
 }
 
-// Deliberately contains no syscall or function call in the hot loop. The
-// vector must remain live while timer preemption and external R4D IRQ
-// handlers run, which is the condition the ordinary sleep-at-call-boundary
-// interleave test could not cover.
-fn chainVectorTight(seed: u32, round_count: u32) u64 {
-    var init: [8]u32 = undefined;
-    var i: u32 = 0;
-    while (i < 8) : (i += 1) init[i] = seed +% (i *% 0x9E37_79B9);
-    var v: Vec = init;
-    const mul: Vec = @splat(@as(u32, 1664525));
-    const add: Vec = @splat(@as(u32, 1013904223));
-    var round: u32 = 0;
-    while (round < round_count) : (round += 1) {
-        v = v *% mul +% add;
-        v ^= @as(Vec, @splat(round));
-    }
-    const out: [8]u32 = v;
-    var acc: u64 = 0;
-    i = 0;
-    while (i < 8) : (i += 1) acc +%= out[i];
-    return acc;
-}
-
 var global_raw: ?*const r4os.abi.R4XStartContext = null;
 
 fn workerMain(arg: u64) callconv(.c) i32 {
@@ -109,6 +83,7 @@ fn workerMain(arg: u64) callconv(.c) i32 {
 }
 
 pub fn r4_app_main(app: *r4os.App) i32 {
+    if (argsEqual(app.args(), "/REGISTERS")) return @import("../performance/main.zig").registerProbe(app);
     const raw = app.startContext();
     const start = r4os.r4xstart.Context.init(raw);
     if (!start.valid()) return 513;
@@ -122,7 +97,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
         return 0;
     }
     if (argsEqual(start.args(), dynamic_arg)) return dynamicSimdProfile(sys);
-    if (argsEqual(start.args(), irq_stress_arg)) return irqStressProfile(sys);
+    if (argsEqual(start.args(), irq_stress_arg)) return irqStressProfile(app, sys);
 
     var t0: r4os.abi.ProgramJoinHandle = .{};
     if (sys.threadCreateHandle(workerMain, 0, 0, 0, &t0) != r4os.abi.thread_ok) {
@@ -165,17 +140,26 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     }
     sys.write("SPECTRA SIMD result: OK rounds=");
     sys.printU64(rounds);
-    sys.write(" threads=3 vec=8x u32");
+    sys.write(" threads=3 vec=8x u32 coverage=numerical-call-boundaries");
     sys.println("");
     return 0;
 }
 
-fn irqStressProfile(sys: *r4os.r4xstart.R4Sys) i32 {
+fn irqStressProfile(app: *r4os.App, sys: *r4os.r4xstart.R4Sys) i32 {
     sys.write("SPECTRA SIMD irqstress start rounds=");
     sys.printU64(irq_stress_rounds);
-    sys.println(" hotloop=yes");
-
-    const actual = chainVectorTight(irq_stress_seed, irq_stress_rounds);
+    sys.println(" hotloop=yes callsInsideLiveWindow=0");
+    const dev = app.devicesLowLevel() orelse {
+        sys.println("SPECTRA SIMD irqstress unavailable: R4DEV");
+        return 1;
+    };
+    if (!dev.hasFn("fpu_observation")) {
+        sys.println("SPECTRA SIMD irqstress unavailable: event metadata");
+        return 1;
+    }
+    const scope = observed.Scope.begin(&dev, observed.chainWindow()) orelse return 1;
+    const actual = observed.chain(irq_stress_seed, irq_stress_rounds);
+    const info = scope.finish(&dev) orelse return 1;
     const expected = chainScalarRounds(irq_stress_seed, irq_stress_rounds);
     if (actual != expected) {
         sys.write("SPECTRA SIMD irqstress result: FAILED actual=");
@@ -185,9 +169,12 @@ fn irqStressProfile(sys: *r4os.r4xstart.R4Sys) i32 {
         sys.println("");
         return 1;
     }
+    var evidence: observed.Evidence = .{};
+    if (!evidence.add(info)) return 1;
+    evidence.print(sys, "SPECTRA SIMD irqstress events");
     sys.write("SPECTRA SIMD irqstress result: OK rounds=");
     sys.printU64(irq_stress_rounds);
-    sys.println(" vec=8x u32 liveAcrossIrq=OK");
+    sys.println(" vec=8x u32 arithmetic=OK; event coverage as reported above");
     return 0;
 }
 
@@ -205,7 +192,7 @@ fn dynamicSimdProfile(sys: *r4os.r4xstart.R4Sys) i32 {
     sys.printU64(dynamic_worker_count);
     sys.write(" active=65 rounds=");
     sys.printU64(rounds);
-    sys.println(" avx2Isolation=OK freshInit=OK reuse=OK");
+    sys.println(" avx2Isolation=OK freshInit=OK reuse=OK coverage=numerical-and-control-reuse");
     return 0;
 }
 

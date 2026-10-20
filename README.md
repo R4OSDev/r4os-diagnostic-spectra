@@ -127,3 +127,12 @@ enable state is captured CR4.MCE only, not global/bank reporting activation.
 The existing owned CPU lifecycle check also copies the exact retained MCA
 snapshot while its AP is proven offline and verifies a fresh capture after
 restart, without additional register operations or extra manual transitions.
+
+0.1.45: CHECK SIMD /REGISTERS runs the existing 96-round two-worker YMM0
+stored-memory oracle inside complete SysV assembly bursts, with both workers
+placed on CPU0 and actually joined. CHECK SIMD /IRQSTRESS retains the exact
+20,000,000-round scalar oracle and reports actual timer IRQs, timer switches
+and registered external R4D handler invocations for its own native task and
+assembly RIP interval. Missing events are unavailable. Ordinary SIMD sleep
+chains cover numerical call-boundary interleaving; direct kernel IRQ guards
+cover guard roundtrips. They do not establish a hardware IRQ.

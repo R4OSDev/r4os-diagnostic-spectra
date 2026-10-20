@@ -1,6 +1,12 @@
 const r4os = @import("r4os");
 const measurement = @import("measurement.zig");
 const observer = @import("observer.zig");
+const observed = @import("../simd/observed.zig");
+const Atomic = @import("std").atomic.Value(u32);
+var avx_gate: Atomic = .init(0);
+var avx_sys: r4os.r4sys.Context = undefined;
+var avx_dev: r4os.r4dev.Context = undefined;
+var avx_evidence: [2]observed.Evidence = .{ .{}, .{} };
 
 const module_version = "0.1.0";
 
@@ -2752,6 +2758,11 @@ const App = struct {
         }
 
         avx_worker_results = .{ 0, 0 };
+        avx_evidence = .{ .{}, .{} };
+        avx_sys = self.sys;
+        avx_dev = self.dev;
+        avx_gate.store(0, .release);
+        if (self.dev.hasFn("fpu_observation") and !observed.contractCheck(&self.dev)) return self.failBool("FPU observation metadata contract");
         var worker_a: r4os.abi.ProgramJoinHandle = .{};
         if (self.sys.threadCreateHandle(avxWorkerMain, 0, 128 * 1024, 0, &worker_a) != r4os.abi.thread_ok) {
             self.printCheck("AVX/AVX2 task state", false);
@@ -2760,6 +2771,7 @@ const App = struct {
         }
         var worker_b: r4os.abi.ProgramJoinHandle = .{};
         if (self.sys.threadCreateHandle(avxWorkerMain, 1, 128 * 1024, 0, &worker_b) != r4os.abi.thread_ok) {
+            avx_gate.store(2, .release);
             var ignored_exit: i32 = 0;
             _ = self.sys.threadHandleJoin(&worker_a, r4os.abi.thread_wait_forever, &ignored_exit);
             self.printCheck("AVX/AVX2 task state", false);
@@ -2767,6 +2779,11 @@ const App = struct {
             return false;
         }
 
+        const placement: r4os.abi.ThreadPlacementRequest = .{ .preferred_cpu = 0 };
+        const mask = [_]u64{1};
+        const placed_a = self.sys.threadPlacementSet(&worker_a, &placement, &mask) == r4os.abi.thread_ok;
+        const placed_b = self.sys.threadPlacementSet(&worker_b, &placement, &mask) == r4os.abi.thread_ok;
+        avx_gate.store(if (placed_a and placed_b) 1 else 2, .release);
         var exit_a: i32 = 0;
         var exit_b: i32 = 0;
         const join_a = self.sys.threadHandleJoin(&worker_a, r4os.abi.thread_wait_forever, &exit_a);
@@ -2778,6 +2795,9 @@ const App = struct {
             avx_worker_results[0] == 1 and
             avx_worker_results[1] == 1;
         self.printCheck("AVX/AVX2 task state", ok);
+        avx_evidence[0].print(&self.sys, "  AVX worker A");
+        avx_evidence[1].print(&self.sys, "  AVX worker B");
+        self.sys.println("  register oracle=stored-memory; direct kernel IRQ guard=guard-roundtrip");
         if (!ok) self.printAvxFailure("register", before, exit_a, exit_b, avx_worker_results[0], avx_worker_results[1]);
         return ok;
     }
@@ -7470,17 +7490,23 @@ fn preemptionWorkerMain(_: u64) callconv(.c) i32 {
 
 fn avxWorkerMain(arg: u64) callconv(.c) i32 {
     const slot: usize = if (arg == 0) 0 else 1;
+    while (avx_gate.load(.acquire) == 0) avx_sys.sleepTicks(1);
+    if (avx_gate.load(.acquire) != 1) return 80;
+    var own: r4os.abi.ProgramJoinHandle = .{};
+    if (avx_sys.threadCurrentHandle(&own) != r4os.abi.thread_ok) return 84;
+    var placement: r4os.abi.ThreadPlacementInfo = .{};
+    if (avx_sys.threadPlacementGet(&own, &placement, &.{}) != r4os.abi.thread_ok or placement.home_cpu != 0 or placement.running_cpu != 0 or placement.request_revision != placement.applied_revision) return 85;
     const pattern = if (slot == 0) &avx_pattern_a else &avx_pattern_b;
     var scratch: [32]u8 align(32) = .{0} ** 32;
     var rounds: u32 = 0;
     while (rounds < 96) : (rounds += 1) {
-        avxLoadYmm0(pattern);
-        const sink: *volatile u64 = &preemption_burn_sink;
-        var i: u64 = 0;
-        while (i < 65536) : (i += 1) {
-            sink.* = sink.* +% ((i << 2) ^ @as(u64, rounds + 31) ^ (sink.* >> 5));
+        const scope = if (avx_dev.hasFn("fpu_observation")) observed.Scope.begin(&avx_dev, observed.registerWindow()) else null;
+        if (avx_dev.hasFn("fpu_observation") and scope == null) return 81;
+        observed.registers(pattern, &scratch, &preemption_burn_sink, rounds);
+        if (scope) |active| {
+            const info = active.finish(&avx_dev) orelse return 82;
+            if (!avx_evidence[slot].add(info)) return 83;
         }
-        avxStoreYmm0(&scratch);
         if (!bytesEq(scratch[0..], pattern[0..])) {
             avx_worker_results[slot] = 2;
             return if (slot == 0) 76 else 77;
@@ -7490,18 +7516,11 @@ fn avxWorkerMain(arg: u64) callconv(.c) i32 {
     return if (slot == 0) 74 else 75;
 }
 
-inline fn avxLoadYmm0(src: *const [32]u8) void {
-    asm volatile ("vmovdqu (%[src]), %%ymm0"
-        :
-        : [src] "r" (src),
-    );
-}
-
-inline fn avxStoreYmm0(dst: *[32]u8) void {
-    asm volatile ("vmovdqu %%ymm0, (%[dst])"
-        :
-        : [dst] "r" (dst),
-    );
+pub fn registerProbe(r4_app: *r4os.App) i32 {
+    var app = App.init(r4_app) orelse return r4os.abi.err_no_group;
+    const ok = app.probeAvxRegisterState();
+    app.sys.println(if (ok) "SPECTRA SIMD registers result: OK" else "SPECTRA SIMD registers result: FAILED");
+    return if (ok) 0 else 1;
 }
 
 fn spinForPreemption(rounds: u32) void {
