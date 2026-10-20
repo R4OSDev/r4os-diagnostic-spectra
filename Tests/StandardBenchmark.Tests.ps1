@@ -29,6 +29,25 @@ try{
  }
  Write-Raw $records
  $run=ConvertTo-SpectraRun $raw $context
+ # Real serial transport can prepend a partial non-JSON diagnostic. Keep
+ # exact record contents and all completeness/duplicate validation intact.
+ $clean=Get-SpectraCanonical $run
+ $lines=[IO.File]::ReadAllLines($raw);$lines[1]='NETRX handof'+$lines[1]
+ [IO.File]::WriteAllLines($raw,$lines,[Text.UTF8Encoding]::new($false))
+ $prefixed=ConvertTo-SpectraRun $raw $context
+ Assert-True ((Get-SpectraCanonical $prefixed) -ceq $clean) 'Serial prefix changed the original complete records.'
+ foreach($transport in @('embedded','trailing','prefixed-duplicate')){
+  Write-Raw $records;$lines=[IO.File]::ReadAllLines($raw)
+  switch($transport){
+   'embedded' {$lines[1]=$lines[1].Insert($lines[1].LastIndexOf('}'),'NETRX handof')}
+   'trailing' {$lines[1]+='NETRX handof'}
+   'prefixed-duplicate' {$lines+=,('NETRX handof'+$lines[1])}
+  }
+  [IO.File]::WriteAllLines($raw,$lines,[Text.UTF8Encoding]::new($false))
+  $rejected=$false;try{$null=ConvertTo-SpectraRun $raw $context}catch{$rejected=$true}
+  Assert-True $rejected ('Invalid serial transport accepted: '+$transport)
+ }
+ Write-Raw $records
  $badContext=Copy-Value $context;$badContext.environment.warmup_min_ns='0'
  $rejected=$false;try{$null=ConvertTo-SpectraRun $raw $badContext}catch{$rejected=$true}
  Assert-True $rejected 'Host/guest warmup policy mismatch was accepted.'

@@ -140,8 +140,11 @@ function Set-SpectraScores($Run,$Reference) {
 }
 function ConvertTo-SpectraRun([string]$GuestRecords,$Context) {
  $records=@(foreach($line in [IO.File]::ReadLines($GuestRecords)){
-  if($line.StartsWith('{"schema":"r4os.spectra.standard"')){
-   $record=$line|ConvertFrom-Json -AsHashtable
+  # A serial diagnostic may leave a prefix before the complete JSON object.
+  # Parse the unchanged suffix in full: embedded/trailing noise still fails.
+  $start=$line.IndexOf('{"schema":"r4os.spectra.standard"',[StringComparison]::Ordinal)
+  if($start -ge 0){
+   $record=$line.Substring($start)|ConvertFrom-Json -AsHashtable
    if($record.schema_version -ne 1){throw 'Unsupported guest result version.'}
    $record
   }
