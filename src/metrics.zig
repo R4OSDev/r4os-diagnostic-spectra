@@ -71,6 +71,7 @@ pub fn run(app: *r4os.App, group: []const u8, out: *Output) i32 {
     if (selected(group, "MCA")) { known = true; ok = @import("mca.zig").collect(&dev, out) and ok; }
     if (selected(group, "MICROCODE")) { known = true; ok = @import("microcode.zig").collect(&dev, out) and ok; }
     if (selected(group, "PMU")) { known = true; ok = @import("pmu.zig").collect(&dev, out) and ok; }
+    if (selected(group, "ENTROPY")) { known = true; ok = @import("entropy.zig").collect(app, out) and ok; }
     if (selected(group, "SMP")) { known = true; ok = @import("smp.zig").collect(&dev, out) and ok; }
     if (selected(group, "SUMMARY")) { known = true; ok = optional(out, "summary", 0, dev.performanceSummary()) and ok; }
     if (selected(group, "LOCKS") or selected(group, "STACKS")) {
