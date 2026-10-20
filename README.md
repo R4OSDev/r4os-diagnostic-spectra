@@ -148,3 +148,12 @@ boot-only `TASKREGISTRY selftest=fpu-environment` owns sleep/yield/migration,
 normal/deadline Work, direct guards, reserve reuse and controlled nonlocal
 returns. Actual IRQ callback coverage requires the explicit EXAMPLE test
 mode below; absent events and unexecuted exception paths stay unqualified.
+
+0.1.47: `METRICS SUMMARY` explicitly identifies the compatibility field
+`fpu_task_state_bytes` as cumulative initialized bytes. It is separate from
+current resident memory and general advertised CPU features. The dynamic
+thread transcript uses `fpuInitializedBytesDelta` for the same counter.
+Kernel boot selection `TASKREGISTRY selftest=xstate-contract` owns the
+nonfaulting common storage bounds, complete state restoration and live
+resident snapshot check before the existing full FP environment matrix.
+Real #MF/#XM delivery remains a separate unexecuted acceptance case.

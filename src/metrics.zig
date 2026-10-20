@@ -73,7 +73,7 @@ pub fn run(app: *r4os.App, group: []const u8, out: *Output) i32 {
     if (selected(group, "PMU")) { known = true; ok = @import("pmu.zig").collect(&dev, out) and ok; }
     if (selected(group, "ENTROPY")) { known = true; ok = @import("entropy.zig").collect(app, out) and ok; }
     if (selected(group, "SMP")) { known = true; ok = @import("smp.zig").collect(&dev, out) and ok; }
-    if (selected(group, "SUMMARY")) { known = true; ok = optional(out, "summary", 0, dev.performanceSummary()) and ok; }
+    if (selected(group, "SUMMARY")) { known = true; ok = optional(out, "summary", 0, dev.performanceSummary()) and ok; out.message("summary", "fpu_task_state_bytes is cumulative initialized bytes, not current resident memory; hardware CPU features and activated XSTATE are separate.", false); }
     if (selected(group, "LOCKS") or selected(group, "STACKS")) {
         known = true;
         if (dev.performanceInstrumentation()) |info| {

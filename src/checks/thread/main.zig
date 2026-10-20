@@ -503,7 +503,7 @@ fn printDynamicBaseline(sys: *r4os.r4sys.Context, before: DynamicBaseline, after
     printPair(sys, before.fpu_task_state_count, after.fpu_task_state_count);
     sys.write(" fpuInitDelta=");
     sys.printU64(after.fpu_task_init_count -| before.fpu_task_init_count);
-    sys.write(" fpuBytesDelta=");
+    sys.write(" fpuInitializedBytesDelta=");
     sys.printU64(after.fpu_task_state_bytes -| before.fpu_task_state_bytes);
     sys.println("");
     sys.write("SPECTRA THREAD dynamic memory instanceReserved=");
