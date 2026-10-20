@@ -34,7 +34,7 @@ pub const Output = struct {
             // Give terminal/SSH readers time to drain each bounded batch.
             // This presentation cost is outside every measured workload;
             // explicit file exports do not incur the pacing delay.
-            self.sys.sleepTicks(@max(1, self.sys.ticksFromMilliseconds(20)));
+            self.sys.sleepTicks(@max(self.sys.ticksFromMilliseconds(20), @as(u64, @intCast((self.used + 15) / 16 + 2))));
         }
         self.offset += self.used;
         self.used = 0;
@@ -52,11 +52,15 @@ pub const Output = struct {
     pub fn write(self: *Output, bytes: []const u8) void {
         var at: usize = 0;
         while (at < bytes.len and !self.failed) {
-            const count = @min(bytes.len - at, self.buffer.len - self.used);
+            var count = @min(bytes.len - at, self.buffer.len - self.used);
+            // Bounded JSON/text records are published whole, through one console
+            // write. File export byte layout and measured workloads are unchanged.
+            if (self.path == null) {
+                if (std.mem.indexOfScalar(u8, bytes[at..][0..count], '\n')) |newline| count = newline + 1;
+            }
             @memcpy(self.buffer[self.used..][0..count], bytes[at..][0..count]);
-            self.used += count;
-            at += count;
-            if (self.used == self.buffer.len) self.flush();
+            self.used += count; at += count;
+            if (self.used == self.buffer.len or (self.path == null and count != 0 and bytes[at-1] == '\n')) self.flush();
         }
     }
 
