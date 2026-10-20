@@ -191,7 +191,7 @@ fn unit(comptime name: []const u8) []const u8 {
     // CPU catalogue frequencies are nominal MHz. Register/control masks and
     // address/PMU bit widths must not inherit generic count/pixel/address units.
     if (std.mem.endsWith(u8, name, "_mhz")) return "MHz";
-    if (std.mem.eql(u8, name, "pmu_counter_width") or std.mem.eql(u8, name, "physical_address_bits") or std.mem.eql(u8, name, "virtual_address_bits")) return "bits";
+    if (std.mem.eql(u8, name, "pmu_counter_width") or std.mem.eql(u8, name, "counter_width") or std.mem.eql(u8, name, "fixed_width") or std.mem.eql(u8, name, "physical_address_bits") or std.mem.eql(u8, name, "virtual_address_bits")) return "bits";
     if (std.mem.eql(u8, name, "cr0") or std.mem.eql(u8, name, "cr4") or std.mem.eql(u8, name, "xcr0") or std.mem.eql(u8, name, "supported_xcr0") or std.mem.eql(u8, name, "efer") or std.mem.eql(u8, name, "pat") or std.mem.eql(u8, name, "raw_value") or std.mem.eql(u8, name, "control_value") or std.mem.eql(u8, name, "legacy_inventory_msr_faults")) return "bitmask";
     if (std.mem.eql(u8, name, "capture_sequence") or std.mem.eql(u8, name, "max_basic_leaf") or std.mem.eql(u8, name, "max_extended_leaf") or std.mem.eql(u8, name, "max_hypervisor_leaf") or std.mem.eql(u8, name, "raw_hypervisor_maximum") or std.mem.eql(u8, name, "source_leaf") or std.mem.eql(u8, name, "source_subleaf")) return "identifier";
     if (std.mem.eql(u8, name, "hardware_state") or std.mem.eql(u8, name, "os_state") or std.mem.eql(u8, name, "use_state") or std.mem.eql(u8, name, "source_register") or std.mem.eql(u8, name, "register_results")) return "code";

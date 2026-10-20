@@ -99,6 +99,10 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     var args_buffer: [1024:0]u8 = undefined;
     var args = request.args();
     if (request.command == .bench) {
+        if (cli.same(group, "PMU")) {
+            if (args.len != 0) return 2;
+            return @import("pmu.zig").run(app, out, true);
+        }
         if (cli.same(group, "OBSERVER")) {
             if (args.len != 0 or request.format == .json or request.export_len != 0) {
                 out.unavailable("observer", "requires real console output; no options or redirected presentation");
