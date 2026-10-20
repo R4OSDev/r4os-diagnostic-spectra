@@ -136,3 +136,15 @@ and registered external R4D handler invocations for its own native task and
 assembly RIP interval. Missing events are unavailable. Ordinary SIMD sleep
 chains cover numerical call-boundary interleaving; direct kernel IRQ guards
 cover guard roundtrips. They do not establish a hardware IRQ.
+
+0.1.46: `CHECK SIMD /ENVIRONMENT` checks all sixteen active YMM/XMM
+registers, eight x87 values with rotated TOP or sparse tags, all eight MMX
+aliases, four rounding modes and only supported FTZ/DAZ combinations. Two
+CPU0 workers run complete assembly bursts and report their own exact
+native-task/RIP timer events. Fresh controls and real thread joins are
+required. A separate ordinary indirect `misc.example` R4P echo checks SysV
+callee-saved controls; its data registers remain caller-saved. The kernel's
+boot-only `TASKREGISTRY selftest=fpu-environment` owns sleep/yield/migration,
+normal/deadline Work, direct guards, reserve reuse and controlled nonlocal
+returns. Actual IRQ callback coverage requires the explicit EXAMPLE test
+mode below; absent events and unexecuted exception paths stay unqualified.
