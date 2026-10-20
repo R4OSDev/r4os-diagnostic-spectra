@@ -56,6 +56,15 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     var ok = true;
 
     ctx.println("SPECTRA FILESYSTEM");
+    if (containsIgnoreCase(app.args(), "/NAMES")) {
+        @import("unicode_names.zig").run(&ctx, &dev) catch |err| {
+            ctx.write("SPECTRA FILESYSTEM names: FAILED reason=");
+            ctx.println(@errorName(err));
+            return 1;
+        };
+        ctx.println("SPECTRA FILESYSTEM result: OK");
+        return 0;
+    }
     if (containsIgnoreCase(app.args(), "/WRITEPOSITIONS")) {
         ok = @import("fat_write_positions.zig").run(&ctx, &dev);
         ctx.print("SPECTRA FILESYSTEM result: ");
