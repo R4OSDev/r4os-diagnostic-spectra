@@ -30,9 +30,7 @@ fn worker(arg: u64) callconv(.c) i32 {
     const slot: usize = @intCast(arg);
     while (gate.load(.acquire) == 0) sys.sleepTicks(1);
     if (gate.load(.acquire) != 1) return 210;
-    var own: a.ProgramJoinHandle = .{};
-    var placement: a.ThreadPlacementInfo = .{};
-    if (sys.threadCurrentHandle(&own) != a.thread_ok or sys.threadPlacementGet(&own, &placement, &.{}) != a.thread_ok or placement.running_cpu != 0 or placement.home_cpu != 0 or placement.request_revision != placement.applied_revision) return 211;
+    if (!@import("placement.zig").cpu0(&sys)) return 211;
     var raw: [512]u8 align(64) = @splat(0);
     legacy(&raw);
     if (!image.defaults(&raw)) return 212;

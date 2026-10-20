@@ -83,6 +83,7 @@ fn workerMain(arg: u64) callconv(.c) i32 {
 }
 
 pub fn r4_app_main(app: *r4os.App) i32 {
+    if (argsEqual(app.args(), "/SAVECOST")) return @import("save_cost.zig").run(app);
     if (argsEqual(app.args(), "/REGISTERS")) return @import("../performance/main.zig").registerProbe(app);
     if (argsEqual(app.args(), "/ENVIRONMENT")) return @import("environment.zig").run(app);
     const raw = app.startContext();

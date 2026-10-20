@@ -7492,10 +7492,7 @@ fn avxWorkerMain(arg: u64) callconv(.c) i32 {
     const slot: usize = if (arg == 0) 0 else 1;
     while (avx_gate.load(.acquire) == 0) avx_sys.sleepTicks(1);
     if (avx_gate.load(.acquire) != 1) return 80;
-    var own: r4os.abi.ProgramJoinHandle = .{};
-    if (avx_sys.threadCurrentHandle(&own) != r4os.abi.thread_ok) return 84;
-    var placement: r4os.abi.ThreadPlacementInfo = .{};
-    if (avx_sys.threadPlacementGet(&own, &placement, &.{}) != r4os.abi.thread_ok or placement.home_cpu != 0 or placement.running_cpu != 0 or placement.request_revision != placement.applied_revision) return 85;
+    if (!@import("../simd/placement.zig").cpu0(&avx_sys)) return 85;
     const pattern = if (slot == 0) &avx_pattern_a else &avx_pattern_b;
     var scratch: [32]u8 align(32) = .{0} ** 32;
     var rounds: u32 = 0;
