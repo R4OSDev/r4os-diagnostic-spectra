@@ -30,9 +30,23 @@ SPECTRA CHECK THREAD /KERNEL:SYNC
 SPECTRA CHECK THREAD /PROCESSEXIT
 SPECTRA CHECK PERFORMANCE
 SPECTRA BENCH CLOCK /REPEAT:3 /WARM
+SPECTRA BENCH DESKTOP /OWN-DESKTOP /JSON
+SPECTRA BENCH SNES /WINDOW /NTSC /NORMAL /SMALL /OUTPUT-ANALYSIS /JSON
 ```
 
 Use `SPECTRA HELP` for the complete group list. No arguments display help. Passive queries never start workloads or enable kernel instrumentation. Benchmarks and checks require an explicit group.
+
+Desktop and SNES benchmarks keep rendering/emulation, fixed work, clocks and
+pixel/state oracles with their existing owners. Spectra controls its exact
+pending GUI child, waits for real completion/reap and forwards original owner
+JSON values without quantifying or filtering them again. Window measurements
+require an isolated Desktop. `/OWN-DESKTOP` explicitly creates a private host
+only when none exists, and closes only that exact host with no foreign windows.
+Commands return without poweroff. The native Core host benchmark keeps its
+separate comparison context in `R4SNES/Benchmark.ps1 -Profile Core`.
+`Tools/StructuredOutput.ps1` is the strict shared file-framing reader; the
+independent SNES Schema-1 export, UUID and DevCenter readback remain with its
+host owner. See `Docs/Diagnostics/Spectra.txt` in the workspace.
 
 Build through `Build.sh` (Linux) or `Build.bat` (Windows), with PS7 and the configured SDK. `Build.sh test` runs the command/routing/measurement host tests. `module.R4MF` owns the artifact identity; the installed name is `SPECTRA.R4X`.
 

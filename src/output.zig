@@ -111,17 +111,34 @@ pub const Output = struct {
 
     pub fn record(self: *Output, kind: []const u8, group: []const u8, index: u64, value: anytype) void {
         if (self.format == .json) {
-            self.write("{\"schema\":\"r4os.spectra\",\"schema_version\":1,\"kind\":"); self.string(kind);
-            self.write(",\"group\":"); self.string(group);
-            self.write(",\"index\":\""); self.number(index);
-            self.write("\",\"snapshot\":\""); self.number(self.sequence);
-            self.write("\",\"detail_enabled\":");
-            if (self.detail) |enabled| self.write(if (enabled) "true" else "false") else self.write("null");
-            self.write(",\"data\":"); self.renderValue(group, "", value, true);
+            self.jsonHeader(kind, group, index);
+            self.renderValue(group, "", value, true);
             self.write("}\n");
         } else {
             self.write(group); self.write("["); self.number(index); self.write("] "); self.write(kind); self.write("\r\n");
             self.renderValue(group, "", value, false);
+        }
+    }
+
+    fn jsonHeader(self: *Output, kind: []const u8, group: []const u8, index: u64) void {
+        self.write("{\"schema\":\"r4os.spectra\",\"schema_version\":1,\"kind\":"); self.string(kind);
+        self.write(",\"group\":"); self.string(group);
+        self.write(",\"index\":\""); self.number(index);
+        self.write("\",\"snapshot\":\""); self.number(self.sequence);
+        self.write("\",\"detail_enabled\":");
+        if (self.detail) |enabled| self.write(if (enabled) "true" else "false") else self.write("null");
+        self.write(",\"data\":");
+    }
+
+    /// Caller validates one complete owner JSON value. Preserve its bytes and
+    /// units; do not apply kernel-detail filtering or quantify/quote it again.
+    pub fn ownerJson(self: *Output, kind: []const u8, group: []const u8, index: u64, bytes: []const u8) void {
+        if (self.format == .json) {
+            self.jsonHeader(kind, group, index);
+            self.write(bytes); self.write("}\n");
+        } else {
+            self.write(group); self.write(" "); self.write(kind); self.write(": ");
+            self.write(bytes); self.write("\r\n");
         }
     }
 

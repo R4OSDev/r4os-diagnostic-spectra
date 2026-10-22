@@ -52,6 +52,10 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "  BENCH CLOCK|BLIT|SERVICE-REGISTRY|KERNEL-IPC|DRIVER-WORK|PCI-INVENTORY|MEMORY-METADATA [options]\r\n" ++
             "  BENCH OBSERVER (console cost comparison)\r\n" ++
             "  BENCH PMU (bounded native counters; separate from STANDARD)\r\n" ++
+            "  BENCH DESKTOP [/OWN-DESKTOP] (original static SDR RAM output work)\r\n" ++
+            "  BENCH SNES /WINDOW [/NTSC|/PAL] [/NORMAL|/DETAIL|/PAIRED] [/SMALL|/MAXIMIZED]\r\n" ++
+            "    [/CHECK] [/OUTPUT-ANALYSIS] [/OWN-DESKTOP] (isolated Desktop required)\r\n" ++
+            "    /OWN-DESKTOP explicitly starts/closes only a new private host; no implicit poweroff.\r\n" ++
             "  BENCH STANDARD [/AREA:scheduler_sync|memory|ipc|lifecycle|filesystem_io]\r\n" ++
             "    [/BASELINE | /REFERENCE:path /COMPAREKEY:method] [/SETTLE:0..5000]\r\n" ++
             "  /JSON writes versioned NDJSON; /EXPORT:path explicitly writes a file.\r\n" ++

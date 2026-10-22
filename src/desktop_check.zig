@@ -8,7 +8,7 @@ const cli = @import("cli.zig");
 const paths = [_][*:0]const u8{ "C:\\R4OS\\SOFTWARE\\DESKTOP\\APPDEF.R4X", "C:\\R4OS\\SOFTWARE\\DESKTOP\\CLOCK.R4X" };
 const item_id: u64 = 0x5350_4543_5452_4137;
 
-const Check = struct {
+pub const Check = struct {
     sys: r.r4sys.Context,
     out: *Output,
     connection: u32 = 0,
@@ -21,6 +21,8 @@ const Check = struct {
     session: bool = false,
     tray_owned: bool = false,
     tray_sequence: u64 = 0,
+    request_item: u64 = item_id,
+    resource_group: []const u8 = "DESKTOP",
     cancelled: bool = false,
     desk: ?r.r4desk.Context = null,
     capture_demand: bool = false,
@@ -28,7 +30,7 @@ const Check = struct {
     capture_leases: [4]a.RemoteFrameLease = .{a.RemoteFrameLease{}} ** 4,
     screenshot_intent: bool = false,
 
-    fn checkDeadline(self: *Check) !void {
+    pub fn checkDeadline(self: *Check) !void {
         if (self.sys.programShouldClose()) { self.cancelled = true; return error.Cancelled; }
         if (self.sys.ticks() >= self.deadline) return error.Timeout;
         if (self.out.failed) return error.Output;
@@ -53,7 +55,7 @@ const Check = struct {
         }
         var bytes: [wire.request_size]u8 = undefined;
         wire.encodeRequest(&bytes, .{ .op = op, .caller = id(self.caller), .target = target, .dx = dx, .dy = dy,
-            .item = item_id, .deadline_tick = self.deadline });
+            .item = self.request_item, .deadline_tick = self.deadline });
         var response: [wire.response_size]u8 = undefined;
         var header: a.ServiceMessageHeader = .{};
         const got = self.sys.serviceCall(self.connection, wire.operation, &bytes, &header, &response, self.sys.ticksFromMilliseconds(3000));
@@ -68,7 +70,10 @@ const Check = struct {
         if (value.result == a.service_api_result_busy) return error.BusyOrUserActivity;
         if (value.result == a.service_api_result_not_found) return error.NotFound;
         if (value.result == a.service_api_result_disabled) return error.RequiresIsolatedDesktopBoot;
-        if (value.result != 0) return error.DesktopWork;
+        if (value.result != 0) {
+            self.out.record("owner-refusal", self.resource_group, 0, .{ .operation = op, .status = value.result, .desktop = value.desktop });
+            return error.DesktopWork;
+        }
         return value;
     }
     fn closeConnection(self: *Check) bool {
@@ -107,6 +112,29 @@ const Check = struct {
         try self.checkDeadline();
         return self.request(op, target, dx, dy);
     }
+    pub fn queryDesktop(self: *Check) !@import("desktop_diagnostics").Snapshot {
+        var backend: @import("desktop_metrics.zig").Backend = .{ .sys = self.sys };
+        const snapshot = @import("desktop_snapshot_client.zig").read(&backend) catch |err| {
+            self.connection = backend.retained_handle;
+            self.connection_owner = backend.retained_owner;
+            return err;
+        };
+        return snapshot;
+    }
+    pub fn beginSession(self: *Check, op: wire.Op) !wire.Response {
+        const snapshot = try self.queryDesktop();
+        if (snapshot.flags & @import("desktop_diagnostics").owner_valid == 0) return error.DesktopUnavailable;
+        self.desktop = .{ .instance = snapshot.desktop_instance, .generation = snapshot.desktop_generation };
+        const result = try self.call(op, .{}, 0, 0);
+        self.session = true;
+        return result;
+    }
+    pub fn prepareSnes(self: *Check, options: wire.SnesOptions) !void {
+        const previous = self.request_item;
+        self.request_item = options.bits();
+        defer self.request_item = previous;
+        _ = try self.call(.snes_prepare, .{}, 0, 0);
+    }
     fn window(self: *Check, index: usize) !wire.Response {
         const start = self.sys.ticks();
         while (true) {
@@ -140,7 +168,7 @@ const Check = struct {
             return error.TrayResponse;
         return reply;
     }
-    fn closeChild(self: *Check, index: usize, allow_kill: bool) bool {
+    pub fn closeChild(self: *Check, index: usize, allow_kill: bool) bool {
         const handle = &self.handles[index];
         if (handle.instance_id == 0) return true;
         _ = self.sys.programHandleRequestClose(handle);
@@ -161,11 +189,11 @@ const Check = struct {
             self.sys.sleepTicks(1);
         }
         if (!id(done.handle).same(id(handle.*)) or done.sequence != sequence) return false;
-        self.out.record("completion", "DESKTOP", index, .{ .handle = handle.*, .sequence = sequence, .exit_code = exit_code, .reaped = true });
+        self.out.record("completion", self.resource_group, index, .{ .handle = handle.*, .sequence = sequence, .exit_code = exit_code, .reaped = true });
         handle.* = .{};
         return allow_kill or exit_code == 0;
     }
-    fn cleanup(self: *Check) bool {
+    pub fn cleanup(self: *Check) bool {
         var ok = true;
         self.deadline = self.sys.ticks() +| self.sys.ticksFromMilliseconds(10000);
         if (!self.closeConnection()) ok = false;
@@ -220,16 +248,7 @@ const Check = struct {
     }
     fn work(self: *Check, app: *r.App, restart: bool, audio: bool, capture: bool) !void {
         for (paths) |path| if (!self.sys.exists(path)) return error.RequiredFullFixtureMissing;
-        var backend: @import("desktop_metrics.zig").Backend = .{ .sys = self.sys };
-        const snapshot = @import("desktop_snapshot_client.zig").read(&backend) catch |err| {
-            self.connection = backend.retained_handle;
-            self.connection_owner = backend.retained_owner;
-            return err;
-        };
-        if (snapshot.flags & @import("desktop_diagnostics").owner_valid == 0) return error.DesktopUnavailable;
-        self.desktop = .{ .instance = snapshot.desktop_instance, .generation = snapshot.desktop_generation };
-        const begin = try self.call(.begin, .{}, 0, 0);
-        self.session = true;
+        const begin = try self.beginSession(.begin);
         if ((restart or audio or capture) and begin.flags & wire.isolated == 0) return error.RequiresIsolatedDesktopBoot;
         self.out.record("owner", "DESKTOP", 0, .{ .contract_version = @as(u32, 1), .desktop = self.desktop,
             .caller = self.caller, .isolated_boot = begin.flags & wire.isolated != 0, .deadline_tick = self.deadline });

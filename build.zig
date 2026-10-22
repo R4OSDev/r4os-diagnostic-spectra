@@ -34,6 +34,12 @@ pub fn build(b: *std.Build) void {
     const desktop_cases = b.createModule(.{ .root_source_file = b.path("src/desktop_snapshot_client.zig"), .target = b.graph.host });
     desktop_cases.addImport("desktop_diagnostics", desktop_wire);
     const desktop_tests = b.addRunArtifact(b.addTest(.{ .root_module = desktop_cases }));
-    b.step("desktop-test", "Bounded current passive Desktop client/protocol cases").dependOn(&desktop_tests.step);
+    const desktop_step = b.step("desktop-test", "Bounded current Desktop client/protocol/control cases");
+    desktop_step.dependOn(&desktop_tests.step);
+    const bench_options = b.createModule(.{ .root_source_file = b.path("src/desktop_bench_options.zig"), .target = b.graph.host });
+    bench_options.addImport("desktop_check", active_wire);
+    const bench_tests = b.addRunArtifact(b.addTest(.{ .root_module = bench_options }));
+    desktop_step.dependOn(&bench_tests.step);
+    test_step.dependOn(&bench_tests.step);
     test_step.dependOn(&desktop_tests.step);
 }

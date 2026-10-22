@@ -151,5 +151,16 @@ try{
  Remove-Item -LiteralPath $cached
  $rejected=$false;try{$null=Resolve-SpectraReference $pinPath $cacheRoot}catch{$rejected=$true}
  Assert-True $rejected 'Missing offline reference was silently accepted.'
- Write-Host 'Spectra standard contract: scoring/raw export and frozen reference cache/fingerprint checks passed.'
+ . (Join-Path $PSScriptRoot '../Tools/StructuredOutput.ps1')
+ $framed='{"schema":"r4os.spectra","schema_version":1,"kind":"snes-sample","group":"SNES","index":"0","snapshot":"0","detail_enabled":false,"data":{"counter":18446744073709551615,"missing":null,"owner_flag":false}}'
+ $structured=Read-SpectraStructuredOutput $framed
+ Assert-True ($structured.Count -eq 1 -and $structured[0].data -is [Collections.IDictionary] -and
+  [string]$structured[0].data.counter -ceq '18446744073709551615' -and $null -eq $structured[0].data.missing -and
+  $structured[0].data.owner_flag -is [bool] -and !$structured[0].data.owner_flag) 'Owner JSON was quoted, filtered or numerically changed.'
+ foreach($invalid in @($framed.Replace('"schema_version":1','"schema_version":0'),$framed.Replace('"schema_version":1','"schema_version":"1"'),$framed.Substring(0,$framed.Length-1))){
+  $rejected=$false;try{$null=Read-SpectraStructuredOutput $invalid}catch{$rejected=$true}
+  Assert-True $rejected 'Malformed/old Spectra owner framing was accepted.'
+ }
+ Assert-True ((Get-SpectraScalar @{value='0';unit='count'}) -ceq '0') 'A quantified zero was lost.'
+ Write-Host 'Spectra standard/structured contracts: original scoring/reference and lossless owner framing checks passed.'
 }finally{Remove-Item -LiteralPath $scratch -Recurse -Force}
