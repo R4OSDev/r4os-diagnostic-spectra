@@ -123,6 +123,10 @@ test "watch requests are finite and restricted to passive commands" {
     try std.testing.expectError(error.InvalidOption, parse("logs /WATCH:61"));
     try std.testing.expectError(error.InvalidOption, parse("logs /WATCH:60 /INTERVAL:2000"));
     try std.testing.expectError(error.InvalidOption, parse("logs /INTERVAL:100"));
+    const desktop = try parse("metrics desktop /JSON /WATCH:2 /INTERVAL:100 /EXPORT:C:\\TEMP\\DESKTOP.JSON");
+    try std.testing.expectEqualStrings("DESKTOP", desktop.group());
+    try std.testing.expectEqual(@as(u32, 2), desktop.count);
+    try std.testing.expectEqual(Format.json, desktop.format);
 }
 
 test "export paths and argument overflow are explicit" {

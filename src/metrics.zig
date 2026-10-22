@@ -60,6 +60,8 @@ pub fn run(app: *r4os.App, group: []const u8, out: *Output) i32 {
     out.record("begin", "collection", 0, .{ .start_ns = sys.monotonicNanoseconds(), .event_hz = sys.monotonicHz(), .atomic_across_groups = false });
     var ok = true;
     var known = false;
+    // Desktop IPC is opt-in. ALL retains its existing kernel-only collection.
+    if (cli.same(group, "DESKTOP")) { known = true; ok = @import("desktop_metrics.zig").collect(app, &dev, out) and ok; }
     if (clock_ok) out.record("snapshot", "clock", 0, clock) else { out.unavailable("clock", "clock quality unavailable"); ok = false; }
     ok = optional(out, "instrumentation", 0, dev.performanceInstrumentation()) and ok;
     if (selected(group, "CLOCK")) {

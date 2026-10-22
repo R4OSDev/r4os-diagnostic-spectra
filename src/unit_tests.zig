@@ -5,6 +5,7 @@ comptime {
     _ = @import("pmu_decode.zig");
     _ = @import("cli.zig");
     _ = @import("route.zig");
+    _ = @import("desktop_snapshot_client.zig");
     _ = @import("checks/performance/measurement.zig");
     _ = @import("checks/memory/resource_balance.zig");
     _ = @import("standard_model.zig");

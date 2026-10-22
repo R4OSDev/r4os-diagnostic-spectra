@@ -32,9 +32,10 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     };
     var result: i32 = 0;
     switch (request.command) {
-        .help => output.message("help", "SPECTRA " ++ @import("spectra_version").value ++ " - kernel diagnostics\r\n" ++
+        .help => output.message("help", "SPECTRA " ++ @import("spectra_version").value ++ " - kernel diagnostics and explicit Desktop state\r\n" ++
             "  METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|SMP|CPUFEATURES|CPUPOWER|MCA|MICROCODE|PMU|ENTROPY|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE\r\n" ++
             "  LOGS BOOT|SERVICE\r\n" ++
+            "  METRICS DESKTOP (passive current WINSVC/Kernel copies; excluded from ALL)\r\n" ++
             "  CHECK BOOT|PERFORMANCE|WORK|THREAD|SMP|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP|USB [options]\r\n" ++
             "  CHECK SMP [/ADMISSION|/LIFECYCLE|/POWER|/FEATURES|/FEATURES-OFFLINE:n|/MCA|/MICROCODE|/PMU|/ACCEL|/ENTROPY|/ENTROPY-NONE]\r\n" ++
             "  CHECK TEXT /CODECS (strict imported legacy/UTF-8 and exact document bytes)\r\n" ++

@@ -1,6 +1,6 @@
 ﻿# Spectra
 
-Spectra is R4OS's console tool for kernel measurements, kernel logs, functional checks and explicit benchmarks. It runs through Terminal and SSH. A GUI is deferred; command parsing, collectors/checks and rendering are separate.
+Spectra is R4OS's console tool for kernel measurements, kernel logs, functional checks, explicit benchmarks and opt-in passive Desktop state. It runs through Terminal and SSH. A GUI is deferred; command parsing, collectors/checks and rendering are separate.
 
 Since0.1.38, `METRICS MICROCODE [/JSON]` copies retained early CPU revision
 receipts. `CHECK SMP /MICROCODE` runs15 synthetic presentation cases and
@@ -16,6 +16,7 @@ qualification limits: `Docs/Core/CpuMicrocode08533.txt`.
 
 ```
 SPECTRA METRICS CLOCK
+SPECTRA METRICS DESKTOP /JSON /WATCH:2 /INTERVAL:100
 SPECTRA METRICS ALL /JSON /EXPORT:C:\TEMP\KERNEL.JSON
 SPECTRA METRICS LOCKS /WATCH:3 /INTERVAL:1000
 SPECTRA LOGS BOOT
@@ -32,7 +33,7 @@ Use `SPECTRA HELP` for the complete group list. No arguments display help. Passi
 
 Build through `Build.sh` (Linux) or `Build.bat` (Windows), with PS7 and the configured SDK. `Build.sh test` runs the command/routing/measurement host tests. `module.R4MF` owns the artifact identity; the installed name is `SPECTRA.R4X`.
 
-An independent checkout can also use `zig build` with the R4OS Zig toolchain; `build.zig.zon` pins the public SDK and library packages.
+`zig build` also requires the current sibling `Services/WindowService/Contract/desktop_diagnostics_v1.zig` source at the manifest-relative path. This small WINSVC-owned byte protocol is a source dependency, with no Desktop implementation dependency; the ordinary workspace build provides it. `build.zig.zon` pins the public SDK and library packages.
 
 The module consolidates former R4OS kernel diagnostics. Source identities and required notices are retained in `Provenance/`; loader fixtures live in `Fixtures/Loader/`. See `DOCUMENTATION.de.txt` for data formats, limits and the migration boundary.
 
@@ -157,3 +158,5 @@ Kernel boot selection `TASKREGISTRY selftest=xstate-contract` owns the
 nonfaulting common storage bounds, complete state restoration and live
 resident snapshot check before the existing full FP environment matrix.
 Real #MF/#XM delivery remains a separate unexecuted acceptance case.
+
+Since0.1.51, `METRICS DESKTOP` copies current WINSVC broker state and passive public display/output/capture metadata. It never starts a Desktop, capture consumer, renderer or detail instrumentation. Unknown render/visibility/cursor times remain null. `METRICS ALL` is unchanged. Protocol offsets, ownership/clock scope, exit semantics and the75--77 migration contract are in `Docs/Diagnostics/Spectra.txt`.

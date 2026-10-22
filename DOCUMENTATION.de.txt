@@ -1,4 +1,4 @@
-﻿Spectra - Kernelwerkzeug 0.1.6
+Spectra - Diagnosewerkzeug 0.1.51
 =============================
 
 Aufrufe
@@ -106,7 +106,8 @@ Faelle behalten den terminalen Kernelpfad. Reserven bleiben unveraendert.
 
 Besitzgrenze
 ------------
-Nur Kernelmessungen/-pruefungen wandern hierher. APPHEAPD behaelt seine
+Spectra buendelt Kerneldiagnosen und ausdrueckliche Desktopdiagnosen.
+Die private Facharbeit bleibt beim jeweiligen Userlandbesitzer. APPHEAPD behaelt seine
 SDK-Allocatorpruefungen, STORDIAG Hardwareinventar und Hardware-Dateiprobe,
 NETIOD die externen TCP-/UDP-Dienstvertraege. DISPLAYD/AUDIOD behalten
 Treiber-/Servicearbeitslasten samt kontextbezogenen Kontrollzaehlern.
@@ -188,3 +189,10 @@ und lokales Scoring liegen unter Spectra/Tools/Export-StandardBenchmark.ps1.
 Der normale SMP4-Test fuehrt eine begrenzte Phase im bestehenden Runner aus;
 Quick/Build-only bleiben ohne Benchmark. Details und aktuelle Importfelder:
 Docs/Diagnostics/SpectraStandardBenchmark.txt.
+
+0.1.51: METRICS DESKTOP ist ausdruecklich passiv und gehoert nicht zu ALL.
+WINSVCs feste128-Byte-Kopie nennt genaue Prozess-/Display-/Clockgenerationen;
+R4DEV/R4DRAW/R4DESK liefern gecachte Ausgaben und Capturezaehler. Keine
+Render-/Capturearbeit oder Instrumentierung, unbekannte Detailzeiten null.
+Aktueller Bytevertrag/Scope sowie CHECK-/BENCH-Migrationsplan75--77 stehen
+in Docs/Diagnostics/Spectra.txt. Host-/Protokollfaelle: Build.sh desktop-test.

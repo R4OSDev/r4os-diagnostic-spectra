@@ -1,7 +1,7 @@
 R4OS_MODULE_MANIFEST=2
 KIND=R4X
 NAME=SPECTRA
-VERSION=0.1.50
+VERSION=0.1.51
 LANGUAGE=Zig
 SOURCE=src/main.zig
 ENTRY_MODE=app
@@ -20,6 +20,7 @@ IMPORT=R4STD:TEXT_V1:1:1
 IMPORT=R4STD:CODEC_V1:1:1
 ZIG_MODULE=r4std:Dependencies/r4std.zig
 ZIG_MODULE=spectra_version:Version.zig
+ZIG_MODULE=desktop_diagnostics:../../Services/WindowService/Contract/desktop_diagnostics_v1.zig
 META=app.role=diagnostic
 META=diagnostic.name=SPECTRA
 META=runtime.parallel=owned-v1
