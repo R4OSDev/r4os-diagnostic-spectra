@@ -98,6 +98,8 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     const group = request.group();
     var args_buffer: [1024:0]u8 = undefined;
     var args = request.args();
+    if (request.command == .check and cli.same(group, "DESKTOP")) return @import("desktop_check.zig").run(app, args, out);
+    if (request.command == .check and cli.same(group, "REMOTEFRAME")) return @import("remote_frame_check.zig").run(app, args, out);
     if (request.command == .check and cli.same(group, "TEXT")) {
         if (!cli.same(args, "/CODECS")) return 2;
         return @import("text_codecs.zig").run(app, out);

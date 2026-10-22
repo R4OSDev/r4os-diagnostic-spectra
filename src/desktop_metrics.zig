@@ -37,13 +37,16 @@ fn outputs(app: *r4os.App, out: *Output) bool {
     return true;
 }
 
-const Backend = struct {
+pub const Backend = struct {
     sys: r4os.r4sys.Context,
     status: i32 = 0,
+    retained_handle: u32 = 0,
+    retained_owner: abi.ProgramProcessHandle = .{},
     pub fn open(self: *@This()) !client.Opened {
         var info: abi.ServiceInfo = .{};
         self.status = self.sys.serviceOpen(abi.window_service_name, &info);
         if (self.status != abi.service_api_result_ok or info.handle == 0) return error.SourceUnavailable;
+        self.retained_handle = info.handle;
         return .{ .handle = info.handle, .instance = info.instance_id };
     }
     pub fn copy(self: *@This(), handle: u32, bytes: []u8) ![]const u8 {
@@ -61,6 +64,7 @@ const Backend = struct {
             info.state != 2 and (!desktop or info.flags & abi.program_instance_flag_desktop_host != 0);
     }
     pub fn current(self: *@This(), s: wire.Snapshot) bool {
+        self.retained_owner = .{ .instance_id = s.service_instance, .generation = s.service_generation };
         var after: abi.ServiceInfo = .{};
         return self.sys.serviceStatus(abi.window_service_name, &after) == abi.service_api_result_ok and
             after.instance_id == s.service_instance and self.live(s.service_instance, s.service_generation, false) and
@@ -69,6 +73,8 @@ const Backend = struct {
     pub fn close(self: *@This(), handle: u32) !void {
         const rc = self.sys.serviceClose(handle);
         if (rc != abi.service_api_result_ok) { self.status = rc; return error.CloseUnconfirmed; }
+        if (self.retained_handle == handle) self.retained_handle = 0;
+        self.retained_owner = .{};
     }
 };
 

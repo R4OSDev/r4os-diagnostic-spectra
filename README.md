@@ -21,6 +21,9 @@ SPECTRA METRICS ALL /JSON /EXPORT:C:\TEMP\KERNEL.JSON
 SPECTRA METRICS LOCKS /WATCH:3 /INTERVAL:1000
 SPECTRA LOGS BOOT
 SPECTRA LOGS SERVICE /JSON
+SPECTRA CHECK DESKTOP /JSON
+SPECTRA CHECK DESKTOP /CANCEL /JSON
+SPECTRA CHECK REMOTEFRAME /EXITOWNED /JSON
 SPECTRA CHECK THREAD
 SPECTRA CHECK THREAD /KERNEL
 SPECTRA CHECK THREAD /KERNEL:SYNC
@@ -33,7 +36,7 @@ Use `SPECTRA HELP` for the complete group list. No arguments display help. Passi
 
 Build through `Build.sh` (Linux) or `Build.bat` (Windows), with PS7 and the configured SDK. `Build.sh test` runs the command/routing/measurement host tests. `module.R4MF` owns the artifact identity; the installed name is `SPECTRA.R4X`.
 
-`zig build` also requires the current sibling `Services/WindowService/Contract/desktop_diagnostics_v1.zig` source at the manifest-relative path. This small WINSVC-owned byte protocol is a source dependency, with no Desktop implementation dependency; the ordinary workspace build provides it. `build.zig.zon` pins the public SDK and library packages.
+`zig build` also requires the current sibling `Services/WindowService/Contract/desktop_diagnostics_v1.zig` and `Apps/Desktop/Contract/desktop_check_v1.zig` sources at their manifest-relative paths. These small owner byte protocols are source dependencies, with no Desktop implementation dependency; the ordinary workspace build provides it. `build.zig.zon` pins the public SDK and library packages.
 
 The module consolidates former R4OS kernel diagnostics. Source identities and required notices are retained in `Provenance/`; loader fixtures live in `Fixtures/Loader/`. See `DOCUMENTATION.de.txt` for data formats, limits and the migration boundary.
 

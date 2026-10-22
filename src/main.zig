@@ -12,6 +12,7 @@ var request: cli.Request = undefined;
 pub fn r4_app_main(app: *r4os.App) i32 {
     const launcher = @import("standard_launch.zig");
     const raw = app.args();
+    if (std.mem.eql(u8, raw, @import("remote_frame_check.zig").child_argument)) return @import("remote_frame_check.zig").child(app);
     const worker = std.mem.startsWith(u8, raw, launcher.prefix);
     var worker_command: [1024]u8 = undefined;
     request = (if (worker) launcher.workerRequest(app, raw, &worker_command) else cli.parse(raw)) catch |err| {
@@ -39,6 +40,9 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "  CHECK BOOT|PERFORMANCE|WORK|THREAD|SMP|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP|USB [options]\r\n" ++
             "  CHECK SMP [/ADMISSION|/LIFECYCLE|/POWER|/FEATURES|/FEATURES-OFFLINE:n|/MCA|/MICROCODE|/PMU|/ACCEL|/ENTROPY|/ENTROPY-NONE]\r\n" ++
             "  CHECK TEXT /CODECS (strict imported legacy/UTF-8 and exact document bytes)\r\n" ++
+            "  CHECK DESKTOP [/RESTART] [/AUDIO] [/CAPTURE] (global variants require /CHECK-ISOLATED Desktop boot)\r\n" ++
+            "  CHECK DESKTOP /CANCEL (own real check child; expects Exit4, reap and empty resources)\r\n" ++
+            "  CHECK REMOTEFRAME [/EXITOWNED] (immutable snapshots; real child exit/reap/owner cleanup)\r\n" ++
             "  CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION] (bounded native checks)\r\n" ++
             "  CHECK THREAD /PLACEMENT (native CPU sets/work classes; requires 4 CPUs)\r\n" ++
             "  CHECK VM /AP (owned AP VM, paging, same/cross-volume file I/O; requires 4 CPUs)\r\n" ++
