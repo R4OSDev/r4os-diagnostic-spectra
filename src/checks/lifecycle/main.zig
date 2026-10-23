@@ -1,3 +1,4 @@
+const std = @import("std");
 const route = @import("../../route.zig");
 const r4os = @import("r4os");
 
@@ -85,7 +86,7 @@ const dynamic_churn_exit_args = [_][*:0]const u8{
     "/LIFECYCLEEXIT 107 0", "/LIFECYCLEEXIT 113 0", "/LIFECYCLEEXIT 119 0", "/LIFECYCLEEXIT 123 0",
 };
 const dynamic_churn_exit_codes = [_]i32{ -9, -2, -1, 101, 107, 113, 119, 123 };
-const legacy_canary_byte: u8 = 0xA5;
+const current_canary_byte: u8 = 0xA5;
 const gui_raster_chain_tile_width: u32 = 128;
 const gui_raster_chain_tile_height: u32 = 128;
 const gui_raster_chain_tile_count: u32 = 6;
@@ -98,68 +99,18 @@ const gui_payload_pixels = [_]u32{
 var dynamic_hold_sys: ?r4os.r4sys.Context = null;
 var dynamic_hold_release: bool = false;
 
-const FrozenProgramRegistrySummaryV1 = extern struct {
-    version: u32 = 1,
-    size: u32 = 160,
-    chunk_slots: u32 = 0,
-    chunk_count: u32 = 0,
-    slot_capacity: u32 = 0,
-    free_slots: u32 = 0,
-    reserved_slots: u32 = 0,
-    live_slots: u32 = 0,
-    done_slots: u32 = 0,
-    retiring_slots: u32 = 0,
-    pinned_slots: u32 = 0,
-    warm_chunks: u32 = 0,
-    last_admission_error: i32 = 0,
-    flags: u32 = 0,
-    peak_chunks: u64 = 0,
-    peak_live: u64 = 0,
-    growth_attempts: u64 = 0,
-    growth_failures: u64 = 0,
-    forced_failures: u64 = 0,
-    publish_count: u64 = 0,
-    rollback_count: u64 = 0,
-    shrink_count: u64 = 0,
-    id_collisions: u64 = 0,
-    id_wraps: u64 = 0,
-    live_id_hash: u64 = 0,
-    live_address_hash: u64 = 0,
-    reserved0: u64 = 0,
+const CurrentSummaryCanary = extern struct {
+    payload: r4os.abi.ProgramRegistrySummaryV2 = .{},
+    canary: [32]u8 = .{current_canary_byte} ** 32,
 };
-
-const FrozenProgramRegistrySelfTestResultV1 = extern struct {
-    version: u32 = 1,
-    size: u32 = 64,
-    operation: u32 = 0,
-    flags: u32 = 0,
-    chunk_count_before: u32 = 0,
-    slot_capacity_before: u32 = 0,
-    free_slots_before: u32 = 0,
-    reserved0: u32 = 0,
-    growth_failures_before: u64 = 0,
-    growth_failures_after: u64 = 0,
-    forced_failures_before: u64 = 0,
-    forced_failures_after: u64 = 0,
-};
-
-const LegacySummaryCanary = extern struct {
-    payload: FrozenProgramRegistrySummaryV1 = .{},
-    canary: [32]u8 = .{legacy_canary_byte} ** 32,
-};
-
-const LegacySelfTestCanary = extern struct {
-    payload: FrozenProgramRegistrySelfTestResultV1 = .{},
-    canary: [32]u8 = .{legacy_canary_byte} ** 32,
+const CurrentSelfTestCanary = extern struct {
+    payload: r4os.abi.ProgramRegistrySelfTestResultV2 = .{},
+    canary: [32]u8 = .{current_canary_byte} ** 32,
 };
 
 comptime {
-    if (@sizeOf(FrozenProgramRegistrySummaryV1) != 160 or @alignOf(FrozenProgramRegistrySummaryV1) != 8)
-        @compileError("frozen R4DEV ProgramRegistrySummary v1 ABI drift");
-    if (@sizeOf(FrozenProgramRegistrySelfTestResultV1) != 64 or @alignOf(FrozenProgramRegistrySelfTestResultV1) != 8)
-        @compileError("frozen R4DEV ProgramRegistrySelfTestResult v1 ABI drift");
-    if (@offsetOf(LegacySummaryCanary, "canary") != 160 or @offsetOf(LegacySelfTestCanary, "canary") != 64)
-        @compileError("R4DEV legacy canary is not adjacent to its payload");
+    if (@offsetOf(CurrentSummaryCanary, "canary") != 224 or @offsetOf(CurrentSelfTestCanary, "canary") != 136)
+        @compileError("current R4DEV canary is not adjacent to its complete payload");
     if (dynamic_stress_program_floor % dynamic_stress_fixture_kinds != 3 or
         dynamic_stress_console_count + dynamic_stress_gui_count + dynamic_stress_service_count !=
             dynamic_stress_program_floor + dynamic_stress_child_count)
@@ -1127,15 +1078,14 @@ fn writeLifecycleOutput(ctx: *DiagApi, requested: u32) void {
 }
 
 fn runProgramLifecycle(ctx: *DiagApi) bool {
-    if (!ctx.dev.hasFn("program_registry_summary") or !ctx.dev.hasFn("program_registry_self_test") or
-        !ctx.dev.hasFn("program_registry_summary_v2") or !ctx.dev.hasFn("program_registry_self_test_v2"))
+    if (!ctx.dev.hasFn("program_registry_summary_v2") or !ctx.dev.hasFn("program_registry_self_test_v2"))
         return programLifecycleFail(ctx, "R4DEV lifecycle telemetry missing");
     if (!ctx.sys.hasFn("program_spawn_handle") or !ctx.sys.hasFn("program_handle_wait") or
         !ctx.sys.hasFn("program_handle_reap") or !ctx.sys.hasFn("program_completion_read"))
         return programLifecycleFail(ctx, "R4SYS owned completion API missing");
 
     ctx.sys.println("SPECTRA LIFECYCLE programlifecycle begin");
-    if (!testLegacyR4DevCanaries(ctx)) return false;
+    if (!testCurrentR4DevCanaries(ctx)) return false;
     if (!lifecycleWarmup(ctx)) return programLifecycleFail(ctx, "warmup failed");
     const baseline = captureRuntimeBaseline(ctx) orelse return programLifecycleFail(ctx, "baseline unavailable");
     const registry = readProgramRegistry(ctx) orelse return programLifecycleFail(ctx, "registry baseline unavailable");
@@ -1172,27 +1122,38 @@ fn runProgramLifecycle(ctx: *DiagApi) bool {
     return true;
 }
 
-fn testLegacyR4DevCanaries(ctx: *DiagApi) bool {
-    var summary: LegacySummaryCanary = .{};
-    if (ctx.dev.programRegistrySummary(@ptrCast(&summary.payload)) <= 0 or
-        summary.payload.version != 1 or summary.payload.size != 160 or !legacyCanaryIntact(summary.canary[0..]))
-        return programLifecycleFail(ctx, "R4DEV legacy summary canary overwritten");
+fn testCurrentR4DevCanaries(ctx: *DiagApi) bool {
+    var summary: CurrentSummaryCanary = .{};
+    @memset(std.mem.asBytes(&summary.payload), 0xA5);
+    summary.payload.version = 2;
+    summary.payload.size = @sizeOf(r4os.abi.ProgramRegistrySummaryV2) - 1;
+    if (ctx.dev.programRegistrySummaryV2(&summary.payload) != -1 or
+        summary.payload.version != 2 or summary.payload.size != 223 or
+        !allBytesEqual(std.mem.asBytes(&summary.payload)[8..], 0xA5) or !currentCanaryIntact(&summary.canary))
+        return programLifecycleFail(ctx, "R4DEV short current summary changed caller bytes");
+    summary.payload = .{};
+    if (ctx.dev.programRegistrySummaryV2(&summary.payload) <= 0 or
+        summary.payload.version != 2 or summary.payload.size != 224 or !currentCanaryIntact(&summary.canary))
+        return programLifecycleFail(ctx, "R4DEV current summary canary overwritten");
 
-    var self_test: LegacySelfTestCanary = .{};
-    self_test.payload.operation = r4os.abi.program_registry_self_test_operation_reset;
-    if (ctx.dev.programRegistrySelfTest(@ptrCast(&self_test.payload)) <= 0 or
-        self_test.payload.version != 1 or self_test.payload.size != 64 or
-        self_test.payload.operation != r4os.abi.program_registry_self_test_operation_reset or
-        !legacyCanaryIntact(self_test.canary[0..]))
-        return programLifecycleFail(ctx, "R4DEV legacy self-test canary overwritten");
-
-    ctx.sys.println("SPECTRA LIFECYCLE programlifecycle r4devLegacyCanary summary=160 selftest=64 slots=29,30 guard=OK");
+    var self_test: CurrentSelfTestCanary = .{};
+    @memset(std.mem.asBytes(&self_test.payload), 0xB6);
+    self_test.payload.version = 2;
+    self_test.payload.size = @sizeOf(r4os.abi.ProgramRegistrySelfTestResultV2) - 1;
+    if (ctx.dev.programRegistrySelfTestV2(&self_test.payload) != -1 or
+        self_test.payload.version != 2 or self_test.payload.size != 135 or
+        !allBytesEqual(std.mem.asBytes(&self_test.payload)[8..], 0xB6) or !currentCanaryIntact(&self_test.canary))
+        return programLifecycleFail(ctx, "R4DEV short current self-test changed caller bytes");
+    self_test.payload = .{ .operation = r4os.abi.program_registry_self_test_operation_reset };
+    if (ctx.dev.programRegistrySelfTestV2(&self_test.payload) <= 0 or
+        self_test.payload.version != 2 or self_test.payload.size != 136 or
+        self_test.payload.operation != r4os.abi.program_registry_self_test_operation_reset or !currentCanaryIntact(&self_test.canary))
+        return programLifecycleFail(ctx, "R4DEV current self-test canary overwritten");
+    ctx.sys.println("SPECTRA LIFECYCLE programlifecycle r4devCurrentCanary summary=224 selftest=136 invalid=unchanged guard=OK");
     return true;
 }
-
-fn legacyCanaryIntact(bytes: []const u8) bool {
-    for (bytes) |byte| if (byte != legacy_canary_byte) return false;
-    return true;
+fn currentCanaryIntact(bytes: []const u8) bool {
+    return allBytesEqual(bytes, current_canary_byte);
 }
 
 fn lifecycleWarmup(ctx: *DiagApi) bool {
@@ -2222,10 +2183,11 @@ fn registryHold(ctx: *DiagApi) i32 {
 }
 
 fn runDynamicProgramRegistry(ctx: *DiagApi) bool {
-    if (!ctx.dev.hasFn("program_registry_summary"))
+    if (!ctx.dev.hasFn("program_registry_summary_v2"))
         return programRegistryFail(ctx, "R4DEV registry summary missing");
-    if (!ctx.dev.hasFn("program_registry_self_test"))
+    if (!ctx.dev.hasFn("program_registry_self_test_v2"))
         return programRegistryFail(ctx, "R4DEV registry self-test missing");
+    if (!testCurrentR4DevCanaries(ctx)) return false;
 
     const resources_before = captureResourceBaseline(ctx) orelse
         return programRegistryFail(ctx, "resource baseline unavailable");
@@ -2398,6 +2360,7 @@ fn runDynamicProgramRegistry(ctx: *DiagApi) bool {
     resetProgramRegistryTest(ctx);
     const final = readProgramRegistry(ctx) orelse
         return programRegistryFail(ctx, "final registry summary unavailable");
+    const resources_after = captureResourceBaseline(ctx);
     if (final.live_slots != baseline.live_slots or
         final.live_id_hash != baseline.live_id_hash or
         final.live_address_hash != baseline.live_address_hash or
@@ -2405,8 +2368,43 @@ fn runDynamicProgramRegistry(ctx: *DiagApi) bool {
         final.done_slots != baseline.done_slots or
         final.retiring_slots != baseline.retiring_slots or
         (final.flags & r4os.abi.program_registry_summary_flag_failure_armed) != 0 or
-        !resourceBaselineRestored(ctx, resources_before))
+        resources_after == null or
+        !sameTotals(resources_before.resources, resources_after.?.resources) or
+        resources_before.instance_count != resources_after.?.instance_count)
+    {
+        inline for (.{ "live_slots", "live_id_hash", "live_address_hash", "reserved_slots", "done_slots", "retiring_slots" }) |field| {
+            const first = @field(baseline, field);
+            const last = @field(final, field);
+            if (first != last) {
+                ctx.sys.write("SPECTRA LIFECYCLE programregistry baseline diff " ++ field ++ "=");
+                ctx.sys.printU64(first);
+                ctx.sys.write(" -> ");
+                ctx.sys.printU64(last);
+                ctx.sys.println("");
+            }
+        }
+        if (resources_after) |after| {
+            inline for (@typeInfo(ResourceTotals).@"struct".fields) |field| {
+                const first = @field(resources_before.resources, field.name);
+                const last = @field(after.resources, field.name);
+                if (first != last) {
+                    ctx.sys.write("SPECTRA LIFECYCLE programregistry baseline diff resources." ++ field.name ++ "=");
+                    ctx.sys.printU64(first);
+                    ctx.sys.write(" -> ");
+                    ctx.sys.printU64(last);
+                    ctx.sys.println("");
+                }
+            }
+            if (resources_before.instance_count != after.instance_count) {
+                ctx.sys.write("SPECTRA LIFECYCLE programregistry baseline diff instances=");
+                ctx.sys.printU64(resources_before.instance_count);
+                ctx.sys.write(" -> ");
+                ctx.sys.printU64(after.instance_count);
+                ctx.sys.println("");
+            }
+        } else ctx.sys.println("SPECTRA LIFECYCLE programregistry baseline resources unavailable");
         return programRegistryFail(ctx, "final registry baseline not restored");
+    }
 
     ctx.sys.write("SPECTRA LIFECYCLE programregistry cleanup live=");
     ctx.sys.printU64(final.live_slots);
@@ -2658,7 +2656,7 @@ fn runDynamicExecutionStress(ctx: *DiagApi, quick: bool) bool {
         !ctx.dev.hasFn("execution_inventory_summary") or
         !ctx.dev.hasFn("program_registry_summary_v2") or
         !ctx.dev.hasFn("program_registry_self_test_v2") or
-        !ctx.dev.hasFn("program_instance_storage_summary") or
+        !ctx.dev.hasFn("program_instance_storage_summary_v2") or
         !ctx.dev.hasFn("performance_summary"))
         return dynamicStressFail(ctx, "required 0.59.7-0.59.11 API missing");
 
@@ -3403,8 +3401,6 @@ fn dynamicStressFail(ctx: *DiagApi, message: []const u8) bool {
 fn runProgramInstanceStorage(ctx: *DiagApi) bool {
     ctx.sys.println("SPECTRA LIFECYCLE programstorage begin");
 
-    if (!ctx.dev.hasFn("program_instance_storage_summary"))
-        return programStorageFail(ctx, "R4DEV storage summary missing");
     if (!ctx.dev.hasFn("program_instance_storage_summary_v2"))
         return programStorageFail(ctx, "R4DEV storage summary v2 missing");
     if (!ctx.dev.hasFn("program_instance_storage_self_test"))
@@ -3513,8 +3509,6 @@ fn runProgramStorageSelfTest(ctx: *DiagApi) bool {
     return true;
 }
 
-const program_storage_summary_v1_size: u32 = 256;
-const program_storage_summary_v1_bytes: usize = program_storage_summary_v1_size;
 
 fn allBytesEqual(bytes: []const u8, expected: u8) bool {
     for (bytes) |byte| {
@@ -3529,19 +3523,8 @@ fn runProgramStorageSummaryNegotiation(ctx: *DiagApi) bool {
     const current_size_u32: u32 = current_size;
     if (current_size != 336) return false;
 
-    // Slot 27 is the frozen output-only v1 ABI. In particular, it must not
-    // inspect an old C caller's uninitialised header and it may never write
-    // past the historical 256-byte object.
-    var v1_bytes: [current_size]u8 align(@alignOf(Summary)) = [_]u8{0xA5} ** current_size;
-    const v1: *Summary = @ptrCast(&v1_bytes);
-    if (ctx.dev.programInstanceStorageSummaryLegacy(v1) <= 0 or
-        v1.version != 1 or v1.size != program_storage_summary_v1_size or
-        !allBytesEqual(v1_bytes[program_storage_summary_v1_bytes..], 0xA5))
-        return false;
-
-    // Slot 34 is the new, header-negotiated v2 ABI. The regular high-level
-    // facade must prefer it, while the explicit facade preserves caller
-    // headers so invalid-input no-write behaviour can be verified below.
+    // The explicit current entry retains caller headers so invalid capacity
+    // is refused without touching the rest of the caller-owned record.
     var v2: Summary = .{};
     v2.version = 2;
     v2.size = current_size_u32;
@@ -3577,7 +3560,7 @@ fn runProgramStorageSummaryNegotiation(ctx: *DiagApi) bool {
         !allBytesEqual(invalid_size_bytes[8..], 0x6B))
         return false;
 
-    ctx.sys.println("SPECTRA LIFECYCLE programstorage summary-prefix legacy=256 tail=unchanged v2=336 future=OK invalid=unchanged");
+    ctx.sys.println("SPECTRA LIFECYCLE programstorage summary-current v2=336 future=OK invalid=unchanged");
     return true;
 }
 
