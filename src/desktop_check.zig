@@ -334,7 +334,7 @@ pub const Check = struct {
         }
         if (capture) try @import("desktop_capture_check.zig").run(self, app);
         // Normal public capture, immutable readers and Exit-owned are one
-        // shared RFDIAG oracle, not copied private Desktop test bodies.
+        // shared public snapshot oracle, not copied private Desktop test bodies.
     }
 };
 fn id(handle: a.ProgramProcessHandle) wire.Identity { return .{ .instance = handle.instance_id, .generation = handle.generation }; }

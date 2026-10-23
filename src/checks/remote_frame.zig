@@ -1,5 +1,5 @@
 //! Public RemoteFrame oracle migrated from RFDIAG; see Provenance/RemoteFrameDiag.
-//! Both entry points use this body until the old module is retired.
+//! The public entry point is SPECTRA CHECK REMOTEFRAME.
 const std = @import("std");
 const r = @import("r4os");
 const a = r.abi;

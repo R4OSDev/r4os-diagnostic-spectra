@@ -177,3 +177,13 @@ resident snapshot check before the existing full FP environment matrix.
 Real #MF/#XM delivery remains a separate unexecuted acceptance case.
 
 Since0.1.51, `METRICS DESKTOP` copies current WINSVC broker state and passive public display/output/capture metadata. It never starts a Desktop, capture consumer, renderer or detail instrumentation. Unknown render/visibility/cursor times remain null. `METRICS ALL` is unchanged. Protocol offsets, ownership/clock scope, exit semantics and the75--77 migration contract are in `Docs/Diagnostics/Spectra.txt`.
+
+## Desktop migration complete (0.86.77)
+
+RFDIAG's transitional module/build and the old Desktop CHECK/PERF forwarders
+are retired. CHECK REMOTEFRAME owns the single public oracle; notices remain
+in `Provenance/RemoteFrameDiag`. Its public repository history stays available.
+BENCH SNES frames the complete original Desktop JSON trace; the redundant
+SNES-PRESENT.TXT writer is gone. Historical exports remain readable.
+Current owner contracts, retained hardware/product/SDK-fixture purposes and
+the Rust-port handoff are in `Docs/Diagnostics/Spectra.txt`.
