@@ -198,3 +198,23 @@ BENCH SNES frames the complete original Desktop JSON trace; the redundant
 SNES-PRESENT.TXT writer is gone. Historical exports remain readable.
 Current owner contracts, retained hardware/product/SDK-fixture purposes and
 the Rust-port handoff are in `Docs/Diagnostics/Spectra.txt`.
+
+`CHECK LIFECYCLE /METADATA` compares32 complete full and metadata-only
+acquisitions in each of five alternating batches, validates exact fields,
+cursor modes/restart and real close/completion/reap, and reuses the existing
+forced-ID-reuse case. It requires the explicit private boot option
+`OPTION PROGRAMLIFECYCLE selftest=yes`; this option is not a normal product
+configuration. Clock source/generation/resolution and nanosecond units must
+match at both interval boundaries. The64-row local fixture bound is a
+diagnostic refusal bound, not a process capacity. Wall time is per acquisition,
+not Desktop FPS or physical display latency. `CHECK DESKTOP /HOST /RESTART`
+also requires the existing Full fixtures APPDEF and CLOCK in its image.
+
+The explicit metadata batches report actual Begin/Page/Busy/Restart/row counts.
+Each acquisition has at most eight attempts; Busy yields one tick without a
+registry lease, and measured wall time includes that wait. Partial or restarted
+rows are never complete results. The existing ID-reuse case retains its original
+24-child warm allocator/registry prerequisite and exact resource baseline.
+Identity-only stale-ID children use the existing explicit `terminal_mode`
+console host. An inherited host deliberately retains child producer blocks in
+its visible transcript after Reap; that retained output is not a process leak.

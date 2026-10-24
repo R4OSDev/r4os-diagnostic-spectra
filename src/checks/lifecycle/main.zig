@@ -178,6 +178,16 @@ const DiagApi = struct {
 
 pub fn r4_app_main(app: *r4os.App) i32 {
     var ctx = DiagApi.init(app) orelse return r4os.abi.err_no_group;
+    if (hasArg(ctx.sys.argsRaw(), "/METADATA")) {
+        if (!@import("metadata.zig").run(ctx.sys)) return fail(&ctx, "lifecycle metadata");
+        // This existing case normally follows lifecycleWarmup/the completion
+        // ring. Preserve its warm allocator/registry prerequisite when selected
+        // without the rest of PROGRAMLIFECYCLE; keep exact baseline assertions.
+        if (!lifecycleWarmup(&ctx)) return fail(&ctx, "metadata stale-reuse warmup");
+        if (!testLifecycleStaleReuse(&ctx)) return fail(&ctx, "lifecycle metadata stale reuse");
+        ctx.sys.println("SPECTRA LIFECYCLE metadata result: OK");
+        return 0;
+    }
     if (hasArg(ctx.sys.argsRaw(), registry_hold_arg)) return registryHold(&ctx);
     if (hasArg(ctx.sys.argsRaw(), lifecycle_foreground_arg)) return lifecycleForeground(&ctx);
     if (hasArg(ctx.sys.argsRaw(), lifecycle_exit_arg)) return lifecycleExit(&ctx);
@@ -1420,7 +1430,11 @@ fn testLifecycleStaleReuse(ctx: *DiagApi) bool {
     const baseline = captureRuntimeBaseline(ctx) orelse return programLifecycleFail(ctx, "stale baseline unavailable");
     const registry = readProgramRegistry(ctx) orelse return programLifecycleFail(ctx, "stale registry unavailable");
     var old: r4os.abi.ProgramProcessHandle = .{};
-    if (ctx.sys.programSpawnHandle(cleanup_path, route.arguments("LIFECYCLE", "/LIFECYCLEEXIT 31 0").ptr(), .auto, &old) != r4os.abi.program_handle_ok)
+    // A console parent intentionally retains sealed child output in its visible
+    // transcript after Reap. These identity-only children need their own host:
+    // otherwise Spectra's result/ready lines add a legitimate16KB transcript
+    // block to the parent's global storage baseline, with no process leak.
+    if (ctx.desk.programSpawnWithConsoleHostHandle(cleanup_path, route.arguments("LIFECYCLE", "/LIFECYCLEEXIT 31 0").ptr(), .auto, .terminal_mode, &old) != r4os.abi.program_handle_ok)
         return programLifecycleFail(ctx, "stale source spawn failed");
     var completion: r4os.abi.ProgramProcessCompletion = .{};
     if (ctx.sys.programHandleWait(&old, 10000, &completion) != r4os.abi.program_handle_ok or
@@ -1441,7 +1455,7 @@ fn testLifecycleStaleReuse(ctx: *DiagApi) bool {
 
     var replacement: r4os.abi.ProgramProcessHandle = .{};
     defer cleanupLifecycleHandles(ctx, @as(*[1]r4os.abi.ProgramProcessHandle, @ptrCast(&replacement))[0..]);
-    if (ctx.sys.programSpawnHandle(cleanup_path, route.arguments("LIFECYCLE", lifecycle_hold_arg).ptr(), .auto, &replacement) != r4os.abi.program_handle_ok or
+    if (ctx.desk.programSpawnWithConsoleHostHandle(cleanup_path, route.arguments("LIFECYCLE", lifecycle_hold_arg).ptr(), .auto, .terminal_mode, &replacement) != r4os.abi.program_handle_ok or
         replacement.instance_id != old.instance_id or replacement.generation == old.generation)
         return programLifecycleFail(ctx, "forced replacement identity mismatch");
 
@@ -1470,8 +1484,10 @@ fn testLifecycleStaleReuse(ctx: *DiagApi) bool {
         ctx.sys.programCompletionRead(&replacement, 0, missing_output[0..], &missing_read) != r4os.abi.program_handle_error_not_found)
         return programLifecycleFail(ctx, "fully reaped operation status mismatch");
     replacement = .{};
-    if (!waitLifecycleBaseline(ctx, baseline, registry, 3000))
+    if (!waitLifecycleBaseline(ctx, baseline, registry, 3000)) {
+        printLifecycleBaselineMismatch(ctx, baseline, registry);
         return programLifecycleFail(ctx, "stale baseline not restored");
+    }
 
     ctx.sys.println("SPECTRA LIFECYCLE programlifecycle stale idReuse=forced status=STALE close=STALE kill=STALE reap=STALE replacement=OK missing=NOT_FOUND wait=NOT_FOUND");
     return true;
@@ -3508,7 +3524,6 @@ fn runProgramStorageSelfTest(ctx: *DiagApi) bool {
     ctx.sys.println(" heap=OK rollback=OK balance=OK");
     return true;
 }
-
 
 fn allBytesEqual(bytes: []const u8, expected: u8) bool {
     for (bytes) |byte| {

@@ -45,6 +45,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "  CHECK DESKTOP /CANCEL (own real check child; expects Exit4, reap and empty resources)\r\n" ++
             "  CHECK REMOTEFRAME [/EXITOWNED] (immutable snapshots; real child exit/reap/owner cleanup)\r\n" ++
             "  CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION] (bounded native checks)\r\n" ++
+            "  CHECK LIFECYCLE /METADATA (bounded full/lifecycle comparison and exact ownership)\r\n" ++
             "  CHECK THREAD /PLACEMENT (native CPU sets/work classes; requires 4 CPUs)\r\n" ++
             "  CHECK VM /AP (owned AP VM, paging, same/cross-volume file I/O; requires 4 CPUs)\r\n" ++
             "  CHECK MEMORY /KERNELHEAP (bounded kernel allocator cases and own cleanup)\r\n" ++
