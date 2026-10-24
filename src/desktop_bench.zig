@@ -51,7 +51,9 @@ fn emit(app: *r.App, out: *Output, path: [*:0]const u8, kind: []const u8, group:
             const software = std.mem.eql(u8, kind, "software-output");
             if (!textField(parsed.value, "contract", if (software) "desktop-software-output-v1" else "desktop-window-output-v1")) return error.OwnerOutputContract;
             const records = parsed.value.object.get("records") orelse return error.OwnerDataMissing;
-            if (records != .array or records.array.items.len == 0 or (software and records.array.items.len != 20)) return error.OwnerDataMissing;
+            const managed_context = !software and textField(parsed.value, "receipt", "managed-output-context-only");
+            if (records != .array or (if (managed_context) records.array.items.len != 0 else records.array.items.len == 0) or
+                (software and records.array.items.len != 20)) return error.OwnerDataMissing;
             if (software) original_count = records.array.items.len;
         }
         out.ownerJson(kind, group, count.*, raw);
@@ -98,7 +100,7 @@ fn work(app: *r.App, check: *Check, options: Options, snes: bool, owner_records:
     if (done.handle.instance_id != target.instance or done.handle.generation != target.generation or done.sequence == 0) return error.SnesCompletion;
     check.out.record("benchmark-child", "SNES", 0, .{ .handle = done.handle, .sequence = done.sequence, .exit_code = done.exit_code });
     if (done.exit_code != 0) return error.SnesChildFailed;
-    _ = try check.call(.snes_finish, target, 0, 0);
+    try @import("desktop_bench_finish.zig").finish(check, target);
     try emit(app, check.out, wire.snes_data_path, "snes-sample", "SNES", true, owner_records);
     const expected: usize = if (options.snes.check_only) 1 else if (options.snes.mode == .paired) 10 else 5;
     if (owner_records.* != expected) return error.SnesSampleCount;

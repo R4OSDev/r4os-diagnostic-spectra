@@ -40,6 +40,11 @@ pub fn build(b: *std.Build) void {
     bench_options.addImport("desktop_check", active_wire);
     const bench_tests = b.addRunArtifact(b.addTest(.{ .root_module = bench_options }));
     desktop_step.dependOn(&bench_tests.step);
+    const finish_tests = b.addRunArtifact(b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("src/desktop_bench_finish.zig"), .target = b.graph.host,
+    }) }));
+    desktop_step.dependOn(&finish_tests.step);
+    test_step.dependOn(&finish_tests.step);
     test_step.dependOn(&bench_tests.step);
     test_step.dependOn(&desktop_tests.step);
 }

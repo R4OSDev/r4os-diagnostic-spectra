@@ -67,6 +67,7 @@ pub const Check = struct {
         const value = try wire.decodeResponse(&response);
         if (value.op != op or !value.desktop.same(self.desktop) or value.target.instance != target.instance or value.target.generation != target.generation)
             return error.OwnerChanged;
+        if (op == .snes_finish and value.result == wire.snes_finish_pending) return error.DesktopReportPending;
         if (value.result == a.service_api_result_busy) return error.BusyOrUserActivity;
         if (value.result == a.service_api_result_not_found) return error.NotFound;
         if (value.result == a.service_api_result_disabled) return error.RequiresIsolatedDesktopBoot;
