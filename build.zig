@@ -7,7 +7,7 @@ const std = @import("std");
 /// Ziel, Imports und Metadaten stehen dort und nirgends sonst.
 pub fn build(b: *std.Build) void {
     const desktop_wire_path: std.Build.LazyPath = .{ .cwd_relative = b.pathResolve(&.{ "../../Services/WindowService/Contract/desktop_diagnostics_v1.zig" }) };
-    const active_wire_path: std.Build.LazyPath = .{ .cwd_relative = b.pathResolve(&.{ "../../Apps/Desktop/Contract/desktop_check_v1.zig" }) };
+    const active_wire_path: std.Build.LazyPath = .{ .cwd_relative = b.pathResolve(&.{ "../../Apps/Desktop/Contract/desktop_check_v2.zig" }) };
     const active_wire = b.createModule(.{ .root_source_file = active_wire_path, .target = b.graph.host });
     const desktop_wire = b.createModule(.{ .root_source_file = desktop_wire_path, .target = b.graph.host });
     const host_tests = b.addTest(.{ .root_module = b.createModule(.{

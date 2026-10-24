@@ -62,7 +62,11 @@ pub fn run(check: anytype, app: *r.App) !void {
         const reply = try check.call(.screenshot_status, .{}, 0, 0);
         if (reply.screenshot_state == 2) break reply;
         try check.pause(50);
-        if (check.sys.ticks() -% save_start >= check.sys.ticksFromMilliseconds(15000)) return error.ScreenshotTimeout;
+        // The unchanged Zig owner also exceeds 15 seconds for a 1280x720
+        // BMP on the supported QEMU ATA-PIO path. Allow that real file I/O;
+        // the whole check still has its original 60-second deadline. Neither
+        // a submitted write nor a visible file replaces the worker join.
+        if (check.sys.ticks() -% save_start >= check.sys.ticksFromMilliseconds(30000)) return error.ScreenshotTimeout;
     };
     var header: [54]u8 = undefined;
     const file = check.sys.fileInfo(path) orelse return error.ScreenshotMissing;

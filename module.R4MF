@@ -1,7 +1,7 @@
 R4OS_MODULE_MANIFEST=2
 KIND=R4X
 NAME=SPECTRA
-VERSION=0.1.55
+VERSION=0.1.56
 LANGUAGE=Zig
 SOURCE=src/main.zig
 ENTRY_MODE=app
@@ -18,6 +18,8 @@ IMPORT=EXTMATH:API_V1:1:1
 IMPORT=R4STD:DATE_V1:1:1
 IMPORT=R4STD:TEXT_V1:1:1
 IMPORT=R4STD:CODEC_V1:1:1
+IMPORT=R4STD:SETTINGS_V1:1
+IMPORT=R4STD:CONFIG_V1:1
 ZIG_MODULE=r4std:Dependencies/r4std.zig
 ZIG_MODULE=spectra_version:Version.zig
 ZIG_MODULE=desktop_diagnostics:../../Services/WindowService/Contract/desktop_diagnostics_v1.zig
@@ -27,4 +29,4 @@ META=runtime.parallel=owned-v1
 META=memory.profile=workstation
 META=memory.tag=spectra
 META=runtime.workers=owned-v1
-ZIG_MODULE=desktop_check:../../Apps/Desktop/Contract/desktop_check_v1.zig
+ZIG_MODULE=desktop_check:../../Apps/Desktop/Contract/desktop_check_v2.zig

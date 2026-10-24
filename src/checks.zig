@@ -99,6 +99,7 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     var args_buffer: [1024:0]u8 = undefined;
     var args = request.args();
     if (request.command == .check and cli.same(group, "DESKTOP")) return @import("desktop_check.zig").run(app, args, out);
+    if (request.command == .check and cli.same(group, "SUBSYSTEM")) return @import("subsystem_check.zig").run(app, args, out);
     if (request.command == .check and cli.same(group, "REMOTEFRAME")) return @import("remote_frame_check.zig").run(app, args, out);
     if (request.command == .bench and (cli.same(group, "DESKTOP") or cli.same(group, "SNES")))
         return @import("desktop_bench.zig").run(app, args, out, cli.same(group, "SNES"));

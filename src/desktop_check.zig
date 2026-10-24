@@ -250,7 +250,7 @@ pub const Check = struct {
         for (paths) |path| if (!self.sys.exists(path)) return error.RequiredFullFixtureMissing;
         const begin = try self.beginSession(.begin);
         if ((restart or audio or capture) and begin.flags & wire.isolated == 0) return error.RequiresIsolatedDesktopBoot;
-        self.out.record("owner", "DESKTOP", 0, .{ .contract_version = @as(u32, 1), .desktop = self.desktop,
+        self.out.record("owner", "DESKTOP", 0, .{ .contract_version = @as(u32, 2), .desktop = self.desktop,
             .caller = self.caller, .isolated_boot = begin.flags & wire.isolated != 0, .deadline_tick = self.deadline });
         for (paths, 0..) |path, index| {
             if (self.sys.programSpawnHandle(path, "", .gui, &self.handles[index]) != 0 or self.handles[index].instance_id == 0) return error.FixtureSpawn;
@@ -341,16 +341,24 @@ fn id(handle: a.ProgramProcessHandle) wire.Identity { return .{ .instance = hand
 
 pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
     if (cli.same(args, "/CANCEL")) return @import("desktop_cancel.zig").run(app, out);
-    var restart = false; var audio = false; var capture = false;
+    var restart = false; var audio = false; var capture = false; var own_host = false;
     var tokens: cli.Tokens = .{ .input = args };
     while (tokens.next() catch return 2) |token| {
         if (cli.same(token, "/RESTART") and !restart) restart = true
         else if (cli.same(token, "/AUDIO") and !audio) audio = true
         else if (cli.same(token, "/CAPTURE") and !capture) capture = true
+        else if (cli.same(token, "/HOST") and !own_host) own_host = true
         else return 2;
     }
     @import("check_context.zig").emit(app, out, "DESKTOP");
     var check: Check = .{ .sys = app.system(), .out = out, .desk = app.desktop() };
+    var host: @import("desktop_host_check.zig").Owner = .{};
+    defer if (!host.retired and !host.finish(check.sys, out)) out.unavailable("DESKTOP", "owned host cleanup not acknowledged");
+    if (own_host) host.start(check.sys) catch |err| {
+        out.unavailable("DESKTOP", @errorName(err));
+        out.record("result", "DESKTOP", 0, .{ .exit_code = @as(i32, 1), .success = false, .cleanup_acknowledged = host.finish(check.sys, out) });
+        return 1;
+    };
     check.deadline = check.sys.ticks() +| check.sys.ticksFromMilliseconds(60000);
     if (check.sys.programOpenHandle(@intCast(app.raw.instance_id), &check.caller) != 0) {
         out.unavailable("DESKTOP", "current caller identity unavailable");
@@ -363,12 +371,14 @@ pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
         result = if (cancelled) 4 else 1;
         out.unavailable("DESKTOP", if (cancelled) "Cancelled" else @errorName(err));
     };
-    const cleaned = check.cleanup();
+    var cleaned = check.cleanup();
     if (!cleaned) result = 1;
     if (result == 0) {
         const capture_result = @import("remote_frame_check.zig").run(app, "", out);
         if (capture_result != 0) result = capture_result;
     }
+    if (!host.finish(check.sys, out)) { cleaned = false; result = 1; }
+    if (host.exit_code) |code| if (code != 0) { result = 1; };
     out.record("result", "DESKTOP", 0, .{ .exit_code = result, .success = result == 0, .cleanup_acknowledged = cleaned,
         .connections_retired_with_exact_service = check.retired_connections,
         .input_consumed_by_check = false, .physical_visibility = @as(?bool, null), .cursor_latency_ns = @as(?u64, null) });

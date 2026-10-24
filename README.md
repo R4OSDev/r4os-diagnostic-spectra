@@ -50,7 +50,18 @@ host owner. See `Docs/Diagnostics/Spectra.txt` in the workspace.
 
 Build through `Build.sh` (Linux) or `Build.bat` (Windows), with PS7 and the configured SDK. `Build.sh test` runs the command/routing/measurement host tests. `module.R4MF` owns the artifact identity; the installed name is `SPECTRA.R4X`.
 
-`zig build` also requires the current sibling `Services/WindowService/Contract/desktop_diagnostics_v1.zig` and `Apps/Desktop/Contract/desktop_check_v1.zig` sources at their manifest-relative paths. These small owner byte protocols are source dependencies, with no Desktop implementation dependency; the ordinary workspace build provides it. `build.zig.zon` pins the public SDK and library packages.
+`zig build` also requires the current sibling `Services/WindowService/Contract/desktop_diagnostics_v1.zig` and `Apps/Desktop/Contract/desktop_check_v2.zig` sources at their manifest-relative paths. These small owner byte protocols are source dependencies, with no Desktop implementation dependency; the ordinary workspace build provides it. `build.zig.zon` pins the public SDK and library packages.
+
+`CHECK DESKTOP /HOST` owns an explicit isolated Desktop only when no foreign
+host exists and reports its real completion/reap separately from check work.
+`CHECK SUBSYSTEM [/HOST] [/SNES]` owns the retained Test-profile BASIC/GB/SNES scenarios,
+including both60-second emulator pairs, original resolver/input/error/save
+work and exact child receipts. It requires the actual Test fixtures; it is
+not an implicit benchmark or an ordinary Full-profile command.
+`/SNES` selects the same original SNES scenarios alone and reports `scope=snes`;
+full Test-profile acceptance requires `scope=all`. Explicit window metadata
+is sampled at most every 50 ms per target, independently of exact process
+completion and reap. Original work, timing gates and cleanup stay unchanged.
 
 The module consolidates former R4OS kernel diagnostics. Source identities and required notices are retained in `Provenance/`; loader fixtures live in `Fixtures/Loader/`. See `DOCUMENTATION.de.txt` for data formats, limits and the migration boundary.
 

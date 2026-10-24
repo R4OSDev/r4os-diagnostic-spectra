@@ -40,7 +40,8 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "  CHECK BOOT|PERFORMANCE|WORK|THREAD|SMP|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP|USB [options]\r\n" ++
             "  CHECK SMP [/ADMISSION|/LIFECYCLE|/POWER|/FEATURES|/FEATURES-OFFLINE:n|/MCA|/MICROCODE|/PMU|/ACCEL|/ENTROPY|/ENTROPY-NONE]\r\n" ++
             "  CHECK TEXT /CODECS (strict imported legacy/UTF-8 and exact document bytes)\r\n" ++
-            "  CHECK DESKTOP [/RESTART] [/AUDIO] [/CAPTURE] (global variants require /CHECK-ISOLATED Desktop boot)\r\n" ++
+            "  CHECK DESKTOP [/HOST] [/RESTART] [/AUDIO] [/CAPTURE] (/HOST owns a standalone isolated Desktop)\r\n" ++
+            "  CHECK SUBSYSTEM [/HOST] [/SNES] (isolated Test fixtures; /SNES selects only that original pair)\r\n" ++
             "  CHECK DESKTOP /CANCEL (own real check child; expects Exit4, reap and empty resources)\r\n" ++
             "  CHECK REMOTEFRAME [/EXITOWNED] (immutable snapshots; real child exit/reap/owner cleanup)\r\n" ++
             "  CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION] (bounded native checks)\r\n" ++
