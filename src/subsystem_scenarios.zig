@@ -527,15 +527,24 @@ pub fn smokeR4SnesProductPath(self: *Controller) bool {
     const focus_interval = @as(u64, @max(self.monotonic_hz, 1)) * 10;
     var next_focus = focus_interval;
     var focus_round: u32 = 0;
+    var witness_input_sent = false;
+    var first_completed = false;
     const redraws_before = self.render_stats.redraws;
     const lost_frames_before = self.render_stats.present_lost_frames;
     const present_failures_before = self.render_stats.present_failures;
     while (self.ctx.ticks() -| exercise_started < exercise_ticks) {
-        if (!sameProcessHandle(self.check.handles[first.index], first.handle) or
-            !sameProcessHandle(self.check.handles[second.index], second.handle))
-        {
-            return self.headlessSubsystemFailure("r4snes-early-exit");
+        if (!sameProcessHandle(self.check.handles[first.index], first.handle) and !first_completed) {
+            // The first guest can finish its full60 guest seconds just
+            // before this controller's later60-second wall interval ends.
+            // Exact identity, successful self-report and all work remain
+            // required; the independent second instance must stay alive.
+            if (!sameProcessHandle(self.window_completion_handles[first.index], first.handle) or
+                self.window_completion_exit_codes[first.index] != 0 or !self.ctx.exists(r4snes_report_a_path))
+                return self.headlessSubsystemFailure("r4snes-early-exit");
+            first_completed = true;
         }
+        if (!sameProcessHandle(self.check.handles[second.index], second.handle))
+            return self.headlessSubsystemFailure("r4snes-early-exit");
         const elapsed = self.ctx.ticks() -| exercise_started;
         if (elapsed >= next_focus) {
             const target = if ((focus_round & 1) == 0) first.index else second.index;
@@ -554,6 +563,15 @@ pub fn smokeR4SnesProductPath(self: *Controller) bool {
             {
                 return self.headlessSubsystemFailure("r4snes-longrun-input");
             }
+            // Arm the guest-ROM witness during the final A focus interval,
+            // while CPU time can still advance. Sending it only after60s
+            // races the deliberately frozen target on a caught-up host.
+            if (target == first.index and elapsed >= exercise_ticks - focus_interval) {
+                if (!self.pushGuiPhysicalKeyEvent(first.index, r4os.abi.physical_key_usage_enter, true) or
+                    !self.pushGuiPhysicalKeyEvent(first.index, r4os.abi.physical_key_usage_right_control, true))
+                    return self.headlessSubsystemFailure("r4snes-witness-input");
+                witness_input_sent = true;
+            }
             focus_round +%= 1;
             next_focus +|= focus_interval;
         }
@@ -568,12 +586,7 @@ pub fn smokeR4SnesProductPath(self: *Controller) bool {
         return self.headlessSubsystemFailure("r4snes-longrun-desktop");
     }
 
-    self.activateWindow(first.index, false);
-    if (!self.pushGuiPhysicalKeyEvent(first.index, r4os.abi.physical_key_usage_enter, true) or
-        !self.pushGuiPhysicalKeyEvent(first.index, r4os.abi.physical_key_usage_right_control, true))
-    {
-        return self.headlessSubsystemFailure("r4snes-witness-input");
-    }
+    if (!witness_input_sent) return self.headlessSubsystemFailure("r4snes-witness-input");
     const first_started = self.ctx.ticks();
     // A TCG-only host can be slower than the 21.477272-MHz guest. The
     // product guest freezes its marked 60-second target and drains bounded
@@ -758,6 +771,7 @@ pub fn launchHeadlessR4SnesGuest(self: *Controller, guest_path: []const u8, trac
 }
 
 pub fn headlessSubsystemFailure(self: *Controller, comptime reason: []const u8) bool {
+    self.check.out.record("failure", "SUBSYSTEM", 0, .{ .stage = reason });
     if (self.ctx.exists(subsystem_host_test_marker_path)) return false;
     const marker = "SUBSYSTEM runtime bootstrap FAILED: " ++ reason ++ "\r\n";
     _ = self.ctx.fileWrite(subsystem_host_test_marker_path, marker);

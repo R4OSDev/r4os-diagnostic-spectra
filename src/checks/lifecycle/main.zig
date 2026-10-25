@@ -331,6 +331,12 @@ fn warmParallelAppRegistry(ctx: *DiagApi) bool {
     // The registry deliberately retains its first two16-slot chunks. Reach
     // the actual six-GUI/two-console peak through normal attached launches.
     // Quiet original hold fixtures avoid new parent transcript references.
+    // This caller's first native Spawn/Kill/inspection can grow its own
+    // stack after a global baseline. Materialize a bounded 256-KB window
+    // before that baseline, page by page as in the existing stack probe.
+    // Every child/current-storage total below remains compared unchanged.
+    _ = prepareAppsCallerStack(63);
+    const caller_stack_before = appsCallerStackCommitted(ctx) orelse return false;
     const cold = captureRuntimeBaseline(ctx) orelse return false;
     var children: [8]?r4os.ProcessHandle = .{null} ** 8;
     defer for (&children) |*child| {
@@ -370,6 +376,12 @@ fn warmParallelAppRegistry(ctx: *DiagApi) bool {
         }
     }
     const warm = captureRuntimeBaseline(ctx) orelse return false;
+    const caller_stack_after = appsCallerStackCommitted(ctx) orelse return false;
+    ctx.sys.write("SPECTRA LIFECYCLE apps warmup caller stack committed=");
+    ctx.sys.printU64(caller_stack_before);
+    ctx.sys.write(" -> ");
+    ctx.sys.printU64(caller_stack_after);
+    ctx.sys.println("");
     if (!sameTotals(cold.resources, warm.resources) or cold.instance_count != warm.instance_count) {
         printBaselineDiff(ctx, cold, warm);
         return false;
@@ -387,6 +399,26 @@ fn warmParallelAppRegistry(ctx: *DiagApi) bool {
     }
     ctx.sys.println("SPECTRA LIFECYCLE apps registry warmup killed/reaped=8 cold payload/frame/VM owners restored: OK");
     return true;
+}
+
+fn appsCallerStackCommitted(ctx: *DiagApi) ?u64 {
+    var thread: r4os.abi.ProgramThreadInfo = .{};
+    if (ctx.sys.threadStatus(0, &thread) != r4os.abi.thread_ok or
+        thread.instance_id == 0 or thread.task_id == 0) return null;
+    return thread.stack_committed_bytes;
+}
+
+noinline fn prepareAppsCallerStack(depth: u32) u8 {
+    var storage: [4096]u8 = undefined;
+    asm volatile (""
+        :
+        : [storage] "r" (&storage),
+        : .{ .memory = true });
+    const bytes: [*]volatile u8 = @ptrCast(&storage);
+    bytes[0] = @truncate(depth);
+    bytes[storage.len - 1] = 0x35;
+    const nested = if (depth != 0) prepareAppsCallerStack(depth - 1) else @as(u8, 0);
+    return nested +% bytes[0] +% bytes[storage.len - 1];
 }
 
 fn parallelAppWarmFailure(ctx: *DiagApi, stage: []const u8, index: usize, code: i32) bool {
