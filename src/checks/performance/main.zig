@@ -2010,11 +2010,7 @@ const App = struct {
             summary.loader_file_range_read_bytes > 0 and
             summary.loader_file_full_reads == 0 and
             summary.loader_metadata_reader_initializations > 0 and
-            summary.loader_metadata_logical_reads > summary.loader_metadata_window_fills and
-            summary.loader_metadata_window_hits > 0 and
-            summary.loader_metadata_window_fills > 0 and
-            summary.loader_metadata_window_fill_bytes > 0 and
-            summary.loader_file_range_read_bytes >= summary.loader_metadata_window_fill_bytes and
+            @import("../loader/metadata.zig").countersValid(summary, self.detailEnabled()) and
             summary.loader_metadata_window_capacity_bytes == 8 * 1024 and
             summary.loader_file_peak_reserved_bytes >= summary.loader_file_peak_committed_bytes and
             summary.loader_file_reserve_failures == 0 and

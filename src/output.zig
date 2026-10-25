@@ -244,6 +244,13 @@ fn unit(comptime name: []const u8) []const u8 {
 }
 
 fn detailField(group: []const u8, comptime name: []const u8) bool {
+    if (std.mem.eql(u8, name, "loader_metadata_logical_reads") or
+        std.mem.eql(u8, name, "loader_metadata_logical_bytes") or
+        std.mem.eql(u8, name, "loader_metadata_window_hits") or
+        std.mem.eql(u8, name, "loader_metadata_window_fills") or
+        std.mem.eql(u8, name, "loader_metadata_window_fill_bytes") or
+        std.mem.eql(u8, name, "loader_metadata_direct_reads") or
+        std.mem.eql(u8, name, "loader_metadata_direct_bytes")) return true;
     if (std.mem.eql(u8, name, "offline_cycles")) return false;
     if (std.mem.indexOf(u8, name, "cycles") != null or std.mem.indexOf(u8, name, "spins") != null) return true;
     if (std.mem.eql(u8, group, "stacks") and std.mem.startsWith(u8, name, "high_water")) return true;

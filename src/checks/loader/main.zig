@@ -1,4 +1,5 @@
 const r4os = @import("r4os");
+const metadata = @import("metadata.zig");
 
 
 var boot_log_buffer: [r4os.abi.boot_log_buffer_size]u8 = .{0xA5} ** r4os.abi.boot_log_buffer_size;
@@ -663,6 +664,8 @@ fn checkLoaderStressDispatch(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4
 }
 
 fn checkStressR4XStarts(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context, path: [*:0]const u8) bool {
+    const instrumentation = dev.performanceInstrumentation() orelse return failCheck(ctx, "Loader instrumentation unavailable");
+    const detailed = instrumentation.mode == 1;
     const before = dev.performanceSummary() orelse return failCheck(ctx, "Loader stress perf before");
     var ids: [stress_spawn_count]u32 = .{0} ** stress_spawn_count;
     var task_ids: [stress_spawn_count]u32 = .{0} ** stress_spawn_count;
@@ -694,12 +697,10 @@ fn checkStressR4XStarts(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.C
         range_delta <= @as(u64, ids.len) * stress_max_range_reads_per_start and
         range_byte_delta > 0 and
         after.loader_file_full_reads == before.loader_file_full_reads;
-    const reader_ok = reader_delta >= ids.len and
-        logical_delta > range_delta and
-        hit_delta > 0 and
-        fill_delta > 0 and
-        fill_delta <= range_delta and
-        fill_byte_delta > 0 and
+    const detail_ok = if (detailed) logical_delta > range_delta and
+        hit_delta > 0 and fill_delta > 0 and fill_delta <= range_delta and fill_byte_delta > 0
+    else metadata.countersValid(before, false) and metadata.countersValid(after, false);
+    const reader_ok = reader_delta >= ids.len and detail_ok and
         after.loader_metadata_window_capacity_bytes == metadata_window_capacity_bytes;
     var cleaned_tasks: usize = 0;
     for (task_ids) |task_id| {
@@ -842,6 +843,8 @@ fn checkLoaderPerformance(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev
 }
 
 fn checkLoaderMemory(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context) bool {
+    const instrumentation = dev.performanceInstrumentation() orelse return failCheck(ctx, "Loader instrumentation unavailable");
+    const detailed = instrumentation.mode == 1;
     if (!dev.hasFn("performance_summary")) return failCheck(ctx, "Loader memory API missing");
     const summary = dev.performanceSummary() orelse return failCheck(ctx, "Loader memory summary unavailable");
     const contract_ok = summary.version == r4os.abi.performance_snapshot_version and
@@ -853,11 +856,7 @@ fn checkLoaderMemory(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Cont
     const read_path_ok = summary.loader_file_range_reads > 0 and summary.loader_file_full_reads == 0;
     const metadata_reader_ok = summary.loader_file_range_read_bytes > 0 and
         summary.loader_metadata_reader_initializations > 0 and
-        summary.loader_metadata_logical_reads > summary.loader_metadata_window_fills and
-        summary.loader_metadata_window_hits > 0 and
-        summary.loader_metadata_window_fills > 0 and
-        summary.loader_metadata_window_fill_bytes > 0 and
-        summary.loader_file_range_read_bytes >= summary.loader_metadata_window_fill_bytes and
+        metadata.countersValid(summary, detailed) and
         summary.loader_metadata_window_capacity_bytes == metadata_window_capacity_bytes;
     const peak_ok = summary.loader_file_peak_reserved_bytes >= summary.loader_file_peak_committed_bytes and
         summary.loader_file_peak_reserved_bytes >= summary.loader_file_reserved_bytes and
@@ -960,6 +959,8 @@ fn checkBadDependencyDemand(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4d
 }
 
 fn checkRelocationWindowDemand(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context) bool {
+    const instrumentation = dev.performanceInstrumentation() orelse return failCheck(ctx, "Loader instrumentation unavailable");
+    const detailed = instrumentation.mode == 1;
     const path = "C:\\R4OS\\PROTOCOLS\\R4TLS.R4P";
     var header: [64]u8 = undefined;
     const data = readHeaderPrefix(ctx, path, header[0..]) orelse return failCheck(ctx, "R4P relocation-window header");
@@ -994,14 +995,14 @@ fn checkRelocationWindowDemand(ctx: *const r4os.r4sys.Context, dev: *const r4os.
     const expected_windows = if (relocation_count == 0) 0 else 1 + (relocation_count - 1) / 170;
     // The fixed allowance covers header, section, entry, import/export and
     // metadata reads.  A historical per-relocation loader exceeds this bound
-    // by more than an order of magnitude for R4TLS.
+    // by more than an order of magnitude for R4TLS. Detail logical reads now
+    // count grouped callback requests, not individual decoded relocations.
+    const detail_ok = if (detailed) logical_delta >= expected_windows and
+        logical_delta < relocation_count and hit_delta > 0 and
+        fill_delta >= expected_windows and fill_delta <= range_delta
+    else metadata.countersValid(before, false) and metadata.countersValid(after, false);
     const io_ok = relocation_count >= 170 and
-        range_delta > 0 and
-        range_delta <= expected_windows + 16 and
-        logical_delta >= relocation_count and
-        hit_delta > 0 and
-        fill_delta >= expected_windows and
-        fill_delta <= range_delta and
+        range_delta > 0 and range_delta <= expected_windows + 16 and detail_ok and
         after.loader_file_full_reads == before.loader_file_full_reads;
     const dispatch_ok = rc == 0 and out_buffer.len > 0;
     const state_ok = checkProtocolState(ctx, dev, "security.tls", .active);

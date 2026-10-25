@@ -1,4 +1,4 @@
-Spectra - Diagnosewerkzeug 0.1.51
+Spectra - Diagnosewerkzeug 0.1.61
 =============================
 
 Aufrufe
@@ -79,6 +79,19 @@ Gruppen vermeiden sie, soweit ein eigener Zaehler-/Listenvertrag existiert.
 Ausgabe und expliziter Export kosten zusaetzliche Laufzeit; die Daten sind
 keine observerfreien Messungen. Eigenkostenbelege stehen im Workspace unter
 Docs/Diagnostics/KernelInstrumentation.txt und KernelInstrumentation0831.json.
+
+Seit0.87.18 sind loader_metadata_logical_reads/bytes, window_hits/fills/
+fill_bytes und direct_reads/bytes Detailwerte. Die Kernel-API liefert im
+Normalbuild0 als nicht erfasst; Spectra zeigt unavailable beziehungsweise
+JSON value=null/unavailable=detail-disabled. Keine gemessene Nullarbeit.
+Ein Detailreader sammelt sie
+privat und publiziert beim Abschluss, auch auf Fehlerpfaden; laufende Reader
+sind in diesen Summen noch nicht enthalten. Reader-Initialisierungen, echte
+Dateibereichsreads, deren Bytes sowie Betriebs-/Fehlerzaehler bleiben aktiv.
+Ein logischer Relocationread kann17Records enthalten; kein direkter Vergleich
+mit frueheren recordweisen logical_reads. CHECK LOADER und CHECK PERFORMANCE
+pruefen diese Modi ausdruecklich; Loaderzulassung, genaue Taskfreigabe und
+physische Readgrenzen behalten ihre bisherigen Anforderungen.
 
 LOGS BOOT liest den vorhandenen 64-KB-Kernelring stabil und zeigt Kapazitaet,
 Laenge, total_written und dropped_bytes. Bei alten Textzeilen sind originale
