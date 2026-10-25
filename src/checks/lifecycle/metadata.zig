@@ -333,3 +333,140 @@ pub fn run(sys: r.r4sys.Context) bool {
     sys.println("SPECTRA LIFECYCLE metadata fields/restart/mode/close/completion/reap result=OK");
     return true;
 }
+
+fn epoch_begin(sys: r.r4sys.Context, cursor: *a.ProgramInventoryCursor) bool {
+    var summary: a.ProgramInventorySummary = .{};
+    const code = prepare_begin(false, sys, cursor, &summary);
+    if (code != 0) return failed_code(sys, "epoch-begin", code);
+    return cursor.program_epoch != 0 and cursor.snapshot_generation == cursor.program_epoch;
+}
+fn epoch_after(sys: r.r4sys.Context, before: a.ProgramInventoryCursor, changed: bool) bool {
+    var after: a.ProgramInventoryCursor = .{};
+    if (!epoch_begin(sys, &after) or (after.program_epoch != before.program_epoch) != changed)
+        return failed_code(sys, if (changed) "epoch-missing-change" else "epoch-false-change", 0);
+    if (!changed) return true;
+    var old = before;
+    var marker = [_]a.ProgramLifecycleSnapshot{.{ .handle = .{ .instance_id = 0x12345678, .generation = 0x1234567887654321 } }};
+    var page: a.ProgramInventoryPageInfo = .{};
+    for (0..8) |_| {
+        const code = sys.programLifecyclePrograms(&old, &marker, &page);
+        if (code == a.program_handle_error_would_block) {
+            sys.sleepTicks(1);
+            continue;
+        }
+        return code == 0 and page.status == a.program_inventory_status_restart and page.returned == 0 and
+            old.program_after_generation == before.program_after_generation and
+            marker[0].handle.instance_id == 0x12345678 and marker[0].handle.generation == 0x1234567887654321;
+    }
+    return failed_code(sys, "epoch-restart-admission", a.program_handle_error_would_block);
+}
+
+// Focused untimed metadata cases. An isolated console guest is required: fake
+// window IDs and the diagnostic's own temporary terminal-host state must not
+// be observed by a concurrently running Desktop. No physical input is used.
+pub fn epoch_owner(app: *r.App) bool {
+    const sys = app.system();
+    const desk = app.desktop() orelse return false;
+    var child: a.ProgramProcessHandle = .{};
+    // Foreground diagnostics can redirect console operations to their parent.
+    // This exact owned console makes the host/request changes self-contained.
+    if (desk.programSpawnWithConsoleHostHandle(route.path, route.arguments("LIFECYCLE", "/METADATAEPOCHCHILD").ptr(), .console, .terminal_window, &child) != 0) return false;
+    var live = true;
+    defer if (live) {
+        _ = sys.programHandleKill(&child);
+        var done: a.ProgramProcessCompletion = .{};
+        if (sys.programHandleWait(&child, sys.ticksFromMilliseconds(8000), &done) == 0) _ = sys.programHandleReap(&child, &done);
+    };
+    var done: a.ProgramProcessCompletion = .{};
+    if (sys.programHandleWait(&child, sys.ticksFromMilliseconds(30000), &done) != 0) return failed_code(sys, "epoch-owned-wait", 0);
+    var output: [4096]u8 = undefined;
+    var read: u32 = 0;
+    const captured = sys.programCompletionRead(&child, 0, &output, &read);
+    if (captured == 0 and read <= output.len) sys.write(output[0..read]);
+    if (sys.programHandleReap(&child, &done) != 0) return false;
+    live = false;
+    if (captured != 0 or read > output.len or done.exit_code != 0) return failed_code(sys, "epoch-owned-result", done.exit_code);
+    sys.println("SPECTRA LIFECYCLE metadata epoch result: OK");
+    return true;
+}
+pub fn epochs(app: *r.App) bool {
+    const sys = app.system();
+    const desk = app.desktop() orelse return false;
+    const draw = app.drawing() orelse return false;
+    var view: View = .{};
+    if (!capture(false, sys, &view)) return false;
+    for (view.rows[0..view.count]) |row| {
+        if (row.flags & a.program_instance_flag_desktop_host != 0)
+            return failed_code(sys, "epoch-requires-isolated-console", 0);
+    }
+    var current: a.ProgramProcessHandle = .{};
+    if (sys.programOpenHandle(@intCast(app.raw.instance_id), &current) != 0) return false;
+    const initial = view.find(current) orelse return false;
+    if (initial.flags & 2 != 0) return failed_code(sys, "epoch-request-already-set", 0);
+    var old: a.ProgramInventoryCursor = .{};
+    if (!epoch_begin(sys, &old) or !epoch_after(sys, old, false)) return false;
+    var child: a.ProgramProcessHandle = .{};
+    if (sys.programSpawnHandle(route.path, route.arguments("LIFECYCLE", "/GUIPAYLOADHOLD").ptr(), .gui, &child) != 0) return false;
+    var live = true;
+    defer if (live) {
+        _ = sys.programHandleKill(&child);
+        var done: a.ProgramProcessCompletion = .{};
+        if (sys.programHandleWait(&child, sys.ticksFromMilliseconds(8000), &done) == 0) _ = sys.programHandleReap(&child, &done);
+    };
+    if (!epoch_after(sys, old, true)) return false;
+    // Initial attachment starts the GUI child. A real frame proves it has
+    // executed after activation; public "running" alone includes publication.
+    if (desk.programSetWindowHandle(&child, 0) != 0) return false;
+    var ready = false;
+    const ready_start = sys.ticks();
+    while (sys.ticks() -| ready_start < sys.ticksFromMilliseconds(8000)) {
+        var info: a.ProgramInstanceInfo = .{};
+        if (sys.programHandleStatus(&child, &info) != 0) return false;
+        if (info.state == @intFromEnum(a.ProgramInstanceState.done)) return false;
+        var frame: a.GuiFrameInfo = .{};
+        if (draw.guiFrameInfo(&child, &frame) == 0 and frame.committed_generation != 0) {
+            ready = true;
+            break;
+        }
+        sys.sleepTicks(1);
+    }
+    if (!ready) return false;
+    for ([_]bool{ true, false }) |by_handle| {
+        if (!epoch_begin(sys, &old)) return false;
+        const window: i32 = if (by_handle) 123 else 456;
+        const code = if (by_handle) desk.programSetWindowHandle(&child, window) else desk.programSetWindow(child.instance_id, window);
+        if (code != 0 or !epoch_after(sys, old, true)) return false;
+        if (!capture(false, sys, &view)) return false;
+        const row = view.find(child) orelse return false;
+        if (row.window_id != window) return false;
+        if (!epoch_begin(sys, &old)) return false;
+        const same = if (by_handle) desk.programSetWindowHandle(&child, window) else desk.programSetWindow(child.instance_id, window);
+        if (same != 0 or !epoch_after(sys, old, false)) return false;
+    }
+    const original_host = sys.programCurrentConsoleHost();
+    defer _ = desk.programSetConsoleHost(current.instance_id, original_host);
+    if (original_host == .terminal_mode) return failed_code(sys, "epoch-requires-unhosted-caller", 0);
+    if (!epoch_begin(sys, &old) or desk.programSetConsoleHost(current.instance_id, .terminal_mode) != 0 or
+        !epoch_after(sys, old, true)) return false;
+    if (!capture(false, sys, &view) or (view.find(current) orelse return false).flags & 4 == 0) return false;
+    if (!epoch_begin(sys, &old) or desk.programSetConsoleHost(current.instance_id, .terminal_mode) != 0 or
+        !epoch_after(sys, old, false)) return false;
+    if (!epoch_begin(sys, &old) or sys.programRequestDesktop() != 0 or !epoch_after(sys, old, true)) return false;
+    if (!capture(false, sys, &view) or (view.find(current) orelse return false).flags & 2 == 0) return false;
+    if (!epoch_begin(sys, &old) or sys.programRequestDesktop() != 0 or !epoch_after(sys, old, false)) return false;
+    if (!epoch_begin(sys, &old) or desk.programSetConsoleHost(current.instance_id, original_host) != 0 or
+        !epoch_after(sys, old, true)) return false;
+    if (!capture(false, sys, &view) or (view.find(current) orelse return false).flags & 4 != initial.flags & 4) return false;
+    if (!epoch_begin(sys, &old) or sys.programHandleRequestClose(&child) != 0 or !epoch_after(sys, old, true)) return false;
+    var done: a.ProgramProcessCompletion = .{};
+    if (sys.programHandleWait(&child, sys.ticksFromMilliseconds(8000), &done) != 0 or done.exit_code != 0) return false;
+    if (!capture(false, sys, &view)) return false;
+    if ((view.find(child) orelse return false).state != @intFromEnum(a.ProgramInstanceState.done)) return false;
+    if (!epoch_begin(sys, &old) or sys.programHandleReap(&child, &done) != 0 or !epoch_after(sys, old, true)) return false;
+    live = false;
+    if (!capture(false, sys, &view) or view.find(child) != null) return false;
+    const stale = desk.programSetWindowHandle(&child, 789);
+    if (stale != a.program_handle_error_stale and stale != a.program_handle_error_not_found) return false;
+    sys.println("SPECTRA LIFECYCLE metadata epoch window-handle/id=OK console-host=OK desktop-request=OK unchanged=stable restart=atomic close/done/reap=OK stale=rejected");
+    return true;
+}

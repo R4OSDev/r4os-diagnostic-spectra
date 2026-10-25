@@ -178,6 +178,12 @@ const DiagApi = struct {
 
 pub fn r4_app_main(app: *r4os.App) i32 {
     var ctx = DiagApi.init(app) orelse return r4os.abi.err_no_group;
+    if (hasArg(ctx.sys.argsRaw(), "/METADATAEPOCH")) {
+        if (!@import("metadata.zig").epoch_owner(app)) return fail(&ctx, "lifecycle metadata epoch");
+        return 0;
+    }
+    if (hasArg(ctx.sys.argsRaw(), "/METADATAEPOCHCHILD"))
+        return if (@import("metadata.zig").epochs(app)) 0 else 1;
     if (hasArg(ctx.sys.argsRaw(), "/METADATA")) {
         if (!@import("metadata.zig").run(ctx.sys)) return fail(&ctx, "lifecycle metadata");
         // This existing case normally follows lifecycleWarmup/the completion
