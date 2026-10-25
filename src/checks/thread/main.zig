@@ -49,6 +49,9 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     const resources = app.resources();
     global_sys = sys;
 
+    if (argsEqual(app.args(), "/RTC")) return @import("rtc.zig").parent(app);
+    if (argsEqual(app.args(), "/RTCWORKER")) return @import("rtc.zig").child(app);
+
     if (argsEqual(app.args(), "/PLACEMENT")) return @import("placement.zig").parent(app);
     if (argsEqual(app.args(), "/PLACEMENTBSP") or @import("std").mem.startsWith(u8, app.args(), "/PLACEMENTBSP:")) return @import("placement.zig").bsp(app);
     if (@import("std").mem.startsWith(u8, app.args(), "/PLACEMENTWORKER:")) return @import("placement.zig").child(app, app.args());

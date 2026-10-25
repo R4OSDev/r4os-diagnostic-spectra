@@ -1,4 +1,4 @@
-Spectra - Diagnosewerkzeug 0.1.61
+Spectra - Diagnosewerkzeug 0.1.62
 =============================
 
 Aufrufe
@@ -19,6 +19,7 @@ CHECK uebernimmt die fachlichen Optionen der bisherigen Pruefung. Beispiele:
   SPECTRA CHECK ASYNC_IO /LENGTHS
   SPECTRA CHECK STACK /RECOVERY
   SPECTRA CHECK THREAD /PROCESSEXIT
+  SPECTRA CHECK THREAD /RTC
   SPECTRA CHECK LIFECYCLE /PROGRAMLIFECYCLE
 /PAGECACHE braucht das ausdruecklich gewaehlte FAT32-Testvolume mit TEMP-Ordner.
 Der reguläre Headless-Test liefert F: auf einem separaten 64-MB-Medium;
@@ -30,6 +31,16 @@ bisherigen begrenzten Last-/Aufraeumvertraege. OBSERVER misst auch reale
 Konsolenausgabe und akzeptiert deshalb keine umgeleitete Darstellung.
 Interne HOLD-/EXIT-Kindfixtures bleiben fuer Lebenszykluspruefungen erhalten;
 HOLD wartet ausdruecklich auf Close/Kill und ist kein normaler Kurztest.
+
+THREAD /RTC ist ausschliesslich fuer einen isolierten Gast mit vier CPUs:
+Er stellt die systemweite Kalenderzeit voruebergehend auf Testdaten, prueft
+parallele Leser/Setzer, IF-Erhalt und ungueltige Datumswerte. Der Parent
+restauriert die urspruengliche Zeit plus monotone Laufzeit erst nach genauem
+Kindabschluss/Reap. Kein automatischer Lauf in METRICS oder STANDARD.
+Erfolg verlangt "SPECTRA RTC result: OK child_reaped=yes restored=yes";
+bei fehlendem Kindabbau bleibt Restore ausdruecklich pending. Der interne
+/RTCWORKER ist nur das vom Parent verwaltete Fixture. Besitz und Nachweise:
+Docs/Core/CalendarClock.txt im Dokumentationsrepository.
 
 Ausgabe
 -------
