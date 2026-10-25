@@ -341,6 +341,17 @@ fn checkCacheReadThrough(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.
     return ok;
 }
 
+// FileInfo exposes FAT's two-second projection, while the NTFS write owner
+// stores full FILETIME seconds. The same UTC R4STD contract bounds both ends.
+fn ntfsStampInWindow(date: u16, time: u16, before: r4os.abi.TimeState, after: r4os.abi.TimeState) bool {
+    const start = r4std.date.utcFromDateTime(r4std.date.fromTimeState(before) orelse return false, 0) orelse return false;
+    const end = r4std.date.utcFromDateTime(r4std.date.fromTimeState(after) orelse return false, 0) orelse return false;
+    const value = r4std.date.utcFromDateTime(r4std.date.decodeFatDateTime(date, time) orelse return false, 0) orelse return false;
+    return end.seconds_since_unix_epoch >= start.seconds_since_unix_epoch and
+        value.seconds_since_unix_epoch >= start.seconds_since_unix_epoch - 1 and
+        value.seconds_since_unix_epoch <= end.seconds_since_unix_epoch;
+}
+
 fn checkNtfsMetadataCache(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context) bool {
     if (!dev.hasFn("performance_summary")) {
         ctx.println("SPECTRA FILESYSTEM ntfs metadata cache: FAILED performance unavailable");
@@ -407,7 +418,9 @@ fn checkNtfsMetadataCache(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev
     var append_data_buf: [1024]u8 = undefined;
     fillStreamPattern(initial_data[0..], 0);
     fillStreamPattern(append_data_buf[0..], initial_data.len);
+    const create_time_before = ctx.timeState();
     const written = ctx.fileWrite(ntfs_metadata_probe_path, initial_data[0..]);
+    const create_time_after = ctx.timeState();
     const after_write = dev.performanceSummary() orelse {
         ctx.println("SPECTRA FILESYSTEM ntfs metadata cache: FAILED post-create snapshot");
         return false;
@@ -426,7 +439,16 @@ fn checkNtfsMetadataCache(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev
     const positive_sizes_ok = first_info != null and second_info != null and
         first_info.?.size == initial_data.len and
         second_info.?.size == initial_data.len;
-    const cold_positive_ok = written == expected_len and positive_sizes_ok and
+    const create_time_ok = if (first_info) |info|
+        ntfsStampInWindow(info.created_date, info.created_time, create_time_before, create_time_after) and
+            ntfsStampInWindow(info.modified_date, info.modified_time, create_time_before, create_time_after) and
+            info.created_date == info.modified_date and info.created_time == info.modified_time
+    else
+        false;
+    const read_time_unchanged = first_info != null and second_info != null and
+        first_info.?.created_date == second_info.?.created_date and first_info.?.created_time == second_info.?.created_time and
+        first_info.?.modified_date == second_info.?.modified_date and first_info.?.modified_time == second_info.?.modified_time;
+    const cold_positive_ok = written == expected_len and positive_sizes_ok and create_time_ok and read_time_unchanged and
         delta(cold_positive.ntfs_metadata_path_misses, after_write.ntfs_metadata_path_misses) > 0 and
         delta(cold_positive.ntfs_metadata_lookup_tree_walks, after_write.ntfs_metadata_lookup_tree_walks) > 0;
     const warm_positive_ok =
@@ -442,7 +464,12 @@ fn checkNtfsMetadataCache(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev
         delta(after_write.ntfs_metadata_recovery_invalidations, warm_missing.ntfs_metadata_recovery_invalidations) == 0 and
         after_write.ntfs_metadata_content_generation == warm_missing.ntfs_metadata_content_generation;
 
+    // Explicit existing metadata diagnostic only: cross one FAT two-second
+    // timestamp quantum so a reused create-time anchor cannot pass append.
+    ctx.sleepTicks(ctx.ticksFromMilliseconds(2100));
+    const append_time_before = ctx.timeState();
     const appended = ctx.fileAppend(ntfs_metadata_probe_path, append_data_buf[0..]);
+    const append_time_after = ctx.timeState();
     const after_append = dev.performanceSummary() orelse {
         ctx.println("SPECTRA FILESYSTEM ntfs metadata cache: FAILED post-append snapshot");
         return false;
@@ -458,7 +485,13 @@ fn checkNtfsMetadataCache(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev
         return false;
     };
     const resized_size = initial_data.len + append_data_buf.len;
-    const resize_invalidation_ok = appended == @as(i32, @intCast(append_data_buf.len)) and
+    const append_time_ok = if (resized_info) |info|
+        ntfsStampInWindow(info.modified_date, info.modified_time, append_time_before, append_time_after) and
+            first_info != null and info.created_date == first_info.?.created_date and info.created_time == first_info.?.created_time and
+            (info.modified_date != first_info.?.modified_date or info.modified_time != first_info.?.modified_time)
+    else
+        false;
+    const resize_invalidation_ok = append_time_ok and appended == @as(i32, @intCast(append_data_buf.len)) and
         resized_info != null and resized_info_warm != null and
         resized_info.?.size == resized_size and resized_info_warm.?.size == resized_size and
         delta(after_append.ntfs_metadata_payload_write_retentions, warm_positive.ntfs_metadata_payload_write_retentions) > 0 and
@@ -567,6 +600,15 @@ fn checkNtfsMetadataCache(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev
         create_invalidation_ok and cold_positive_ok and warm_positive_ok and
         resize_invalidation_ok and combined_ok and rename_invalidation_ok and
         delete_invalidation_ok and index_ok and record_ok and classification_ok;
+    ctx.write("SPECTRA FILESYSTEM ntfs timestamps: ");
+    ctx.write(if (create_time_ok and read_time_unchanged and append_time_ok) "OK" else "FAILED");
+    ctx.write(" create=");
+    ctx.printU64(@intFromBool(create_time_ok));
+    ctx.write(" read_unchanged=");
+    ctx.printU64(@intFromBool(read_time_unchanged));
+    ctx.write(" append_current=");
+    ctx.printU64(@intFromBool(append_time_ok));
+    ctx.println("");
     ctx.write("SPECTRA FILESYSTEM ntfs metadata cache: ");
     ctx.write(if (ok) "OK" else "FAILED");
     ctx.write(" coldMiss=");
