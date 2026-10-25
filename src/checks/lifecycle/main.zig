@@ -4086,10 +4086,16 @@ fn waitForGuiFrame(
     return false;
 }
 
+const GuiFrameSnapshotStorage = struct {
+    commands: [gui_frame_total_command_count]r4os.abi.GuiFrameCommand,
+    resources: [gui_frame_mixed_resource_bytes]u8,
+};
+
 fn validateGuiFrameSnapshot(
     ctx: *DiagApi,
     handle: *const r4os.abi.ProgramProcessHandle,
     info: *const r4os.abi.GuiFrameInfo,
+    snapshot: *GuiFrameSnapshotStorage,
 ) bool {
     var short_commands: [1]r4os.abi.GuiFrameCommand = undefined;
     const short_command_bytes: [*]u8 = @ptrCast(&short_commands);
@@ -4113,8 +4119,8 @@ fn validateGuiFrameSnapshot(
         !allBytesEqual(short_resources[0..], 0xFA))
         return guiFrameLifecycleFailure(ctx, "snapshot-stale");
 
-    var commands: [gui_frame_total_command_count]r4os.abi.GuiFrameCommand = undefined;
-    var resources: [gui_frame_mixed_resource_bytes]u8 = undefined;
+    const commands = &snapshot.commands;
+    const resources = &snapshot.resources;
     var read_info: r4os.abi.GuiFrameInfo = .{};
     if (ctx.draw.guiFrameRead(handle, info.committed_generation, commands[0..], resources[0..], &read_info) !=
         r4os.abi.gui_frame_result_ok or
@@ -4191,54 +4197,21 @@ fn staleGuiFrameHandleRejected(
 fn runGuiFrameContractLifecycle(ctx: *DiagApi) bool {
     if (!ctx.draw.supportsGuiFrameContract() or !ctx.dev.hasFn("program_registry_self_test_v2"))
         return guiFrameLifecycleFailure(ctx, "contract-unavailable");
+    // Keep the large readback buffer in the outer baseline owner, as before
+    // extraction of the shared cycle. Its stack admission precedes cold;
+    // the first child cycle must not grow the diagnostic's own stack.
+    var snapshot: GuiFrameSnapshotStorage = undefined;
     const cold = captureRuntimeBaseline(ctx) orelse return guiFrameLifecycleFailure(ctx, "baseline-cold");
-    if (!warmGuiFrameContractConcurrency(ctx)) return guiFrameLifecycleFailure(ctx, "warm-concurrency");
+    if (!guiFrameContractCycle(ctx, &snapshot)) return guiFrameLifecycleFailure(ctx, "warm-transaction");
     const baseline = captureRuntimeBaseline(ctx) orelse return guiFrameLifecycleFailure(ctx, "baseline-before");
     if (!sameTotals(cold.resources, baseline.resources) or cold.instance_count != baseline.instance_count or
         !sameStorageCurrent(cold.storage, baseline.storage))
+    {
+        printBaselineDiff(ctx, cold, baseline);
         return guiFrameLifecycleFailure(ctx, "warm-baseline-restore");
+    }
 
-    var first = spawnPolicy(ctx, cleanup_path, route.arguments("LIFECYCLE", gui_frame_hold_arg).ptr(), .gui) orelse
-        return guiFrameLifecycleFailure(ctx, "first-spawn");
-    defer cleanupProcess(ctx, &first);
-    if (!attachHeadlessGui(ctx, &first)) return guiFrameLifecycleFailure(ctx, "first-attach");
-    var first_info: r4os.abi.GuiFrameInfo = .{};
-    if (!waitForGuiFrame(ctx, &first, &first_info, 10_000)) return guiFrameLifecycleFailure(ctx, "first-frame");
-    const stale_handle = processAbiHandle(&first);
-    if (!validateGuiFrameSnapshot(ctx, &stale_handle, &first_info)) return false;
-    if (!hardKillGuiFrameProcess(&first)) return guiFrameLifecycleFailure(ctx, "first-hard-kill");
-
-    if (!forceNextProgramInstanceId(ctx, stale_handle.instance_id)) return guiFrameLifecycleFailure(ctx, "force-id-reuse");
-    var replacement = spawnPolicy(ctx, cleanup_path, route.arguments("LIFECYCLE", gui_frame_hold_arg).ptr(), .gui) orelse
-        return guiFrameLifecycleFailure(ctx, "replacement-spawn");
-    defer cleanupProcess(ctx, &replacement);
-    const replacement_handle = processAbiHandle(&replacement);
-    if (replacement_handle.instance_id != stale_handle.instance_id or replacement_handle.generation == stale_handle.generation or
-        !attachHeadlessGui(ctx, &replacement))
-        return guiFrameLifecycleFailure(ctx, "replacement-identity-attach");
-
-    var parallel = spawnPolicy(ctx, cleanup_path, route.arguments("LIFECYCLE", gui_frame_hold_arg).ptr(), .gui) orelse
-        return guiFrameLifecycleFailure(ctx, "parallel-spawn");
-    defer cleanupProcess(ctx, &parallel);
-    const parallel_handle = processAbiHandle(&parallel);
-    if (!attachHeadlessGui(ctx, &parallel)) return guiFrameLifecycleFailure(ctx, "parallel-attach");
-
-    var replacement_info: r4os.abi.GuiFrameInfo = .{};
-    var parallel_info: r4os.abi.GuiFrameInfo = .{};
-    if (!waitForGuiFrame(ctx, &replacement, &replacement_info, 10_000))
-        return guiFrameLifecycleFailure(ctx, "replacement-frame");
-    if (!waitForGuiFrame(ctx, &parallel, &parallel_info, 10_000))
-        return guiFrameLifecycleFailure(ctx, "parallel-frame");
-    if (replacement_info.committed_generation == parallel_info.committed_generation)
-        return guiFrameLifecycleFailure(ctx, "parallel-generation-unique");
-    if (!staleGuiFrameHandleRejected(ctx, &stale_handle, &replacement_handle)) return false;
-
-    if (!hardKillGuiFrameProcess(&replacement)) return guiFrameLifecycleFailure(ctx, "replacement-hard-kill");
-    var retained_parallel: r4os.abi.GuiFrameInfo = .{};
-    if (ctx.draw.guiFrameInfo(&parallel_handle, &retained_parallel) != r4os.abi.gui_frame_result_ok or
-        retained_parallel.committed_generation != parallel_info.committed_generation)
-        return guiFrameLifecycleFailure(ctx, "parallel-retained");
-    if (!hardKillGuiFrameProcess(&parallel)) return guiFrameLifecycleFailure(ctx, "parallel-hard-kill");
+    if (!guiFrameContractCycle(ctx, &snapshot)) return false;
 
     const after = captureRuntimeBaseline(ctx) orelse return guiFrameLifecycleFailure(ctx, "baseline-after");
     const resources_restored = sameTotals(baseline.resources, after.resources);
@@ -4246,6 +4219,7 @@ fn runGuiFrameContractLifecycle(ctx: *DiagApi) bool {
     const instances_restored = baseline.instance_count == after.instance_count;
     const storage_restored = sameStorageCurrent(baseline.storage, after.storage);
     if (!resources_restored or !memory_restored or !instances_restored or !storage_restored) {
+        printBaselineDiff(ctx, baseline, after);
         ctx.sys.write("SPECTRA LIFECYCLE gui-frame baseline resources/memory/instances/storage=");
         ctx.sys.printU64(@intFromBool(resources_restored));
         ctx.sys.write("/");
@@ -4286,24 +4260,54 @@ fn runGuiFrameContractLifecycle(ctx: *DiagApi) bool {
     return true;
 }
 
-fn warmGuiFrameContractConcurrency(ctx: *DiagApi) bool {
-    // The heap keeps newly obtained physical pages for reuse.  Reach the same
-    // two-window peak as the actual ABA test before taking its strict memory
-    // baseline, while still requiring both warm instances and all owned frame
-    // storage to be fully reaped by the caller's cold/warm comparison.
-    var first = spawnPolicy(ctx, cleanup_path, route.arguments("LIFECYCLE", gui_frame_hold_arg).ptr(), .gui) orelse return false;
+// Warm precisely the measured transaction: one full snapshot read/kill, forced
+// ID reuse and two concurrent generations. Peak concurrency alone does not
+// warm this allocation/release order; the heap may legitimately trim backing.
+// Both cycles retain every exact child/frame/ABA check. Only the warm cycle
+// permits infrastructure movement; the measured global memory oracle is exact.
+fn guiFrameContractCycle(ctx: *DiagApi, snapshot: *GuiFrameSnapshotStorage) bool {
+    var first = spawnPolicy(ctx, cleanup_path, route.arguments("LIFECYCLE", gui_frame_hold_arg).ptr(), .gui) orelse
+        return guiFrameLifecycleFailure(ctx, "first-spawn");
     defer cleanupProcess(ctx, &first);
-    var second = spawnPolicy(ctx, cleanup_path, route.arguments("LIFECYCLE", gui_frame_hold_arg).ptr(), .gui) orelse return false;
-    defer cleanupProcess(ctx, &second);
-    if (!attachHeadlessGui(ctx, &first) or !attachHeadlessGui(ctx, &second)) return false;
+    if (!attachHeadlessGui(ctx, &first)) return guiFrameLifecycleFailure(ctx, "first-attach");
     var first_info: r4os.abi.GuiFrameInfo = .{};
-    var second_info: r4os.abi.GuiFrameInfo = .{};
-    if (!waitForGuiFrame(ctx, &first, &first_info, 10_000) or
-        !waitForGuiFrame(ctx, &second, &second_info, 10_000) or
-        first_info.committed_generation == second_info.committed_generation)
-        return false;
-    if (!hardKillGuiFrameProcess(&first)) return false;
-    if (!hardKillGuiFrameProcess(&second)) return false;
+    if (!waitForGuiFrame(ctx, &first, &first_info, 10_000)) return guiFrameLifecycleFailure(ctx, "first-frame");
+    const stale_handle = processAbiHandle(&first);
+    if (!validateGuiFrameSnapshot(ctx, &stale_handle, &first_info, snapshot)) return false;
+    if (!hardKillGuiFrameProcess(&first)) return guiFrameLifecycleFailure(ctx, "first-hard-kill");
+
+    if (!forceNextProgramInstanceId(ctx, stale_handle.instance_id)) return guiFrameLifecycleFailure(ctx, "force-id-reuse");
+    var replacement = spawnPolicy(ctx, cleanup_path, route.arguments("LIFECYCLE", gui_frame_hold_arg).ptr(), .gui) orelse
+        return guiFrameLifecycleFailure(ctx, "replacement-spawn");
+    defer cleanupProcess(ctx, &replacement);
+    const replacement_handle = processAbiHandle(&replacement);
+    if (replacement_handle.instance_id != stale_handle.instance_id or replacement_handle.generation == stale_handle.generation or
+        !attachHeadlessGui(ctx, &replacement))
+        return guiFrameLifecycleFailure(ctx, "replacement-identity-attach");
+
+    var parallel = spawnPolicy(ctx, cleanup_path, route.arguments("LIFECYCLE", gui_frame_hold_arg).ptr(), .gui) orelse
+        return guiFrameLifecycleFailure(ctx, "parallel-spawn");
+    defer cleanupProcess(ctx, &parallel);
+    const parallel_handle = processAbiHandle(&parallel);
+    if (!attachHeadlessGui(ctx, &parallel)) return guiFrameLifecycleFailure(ctx, "parallel-attach");
+
+    var replacement_info: r4os.abi.GuiFrameInfo = .{};
+    var parallel_info: r4os.abi.GuiFrameInfo = .{};
+    if (!waitForGuiFrame(ctx, &replacement, &replacement_info, 10_000))
+        return guiFrameLifecycleFailure(ctx, "replacement-frame");
+    if (!waitForGuiFrame(ctx, &parallel, &parallel_info, 10_000))
+        return guiFrameLifecycleFailure(ctx, "parallel-frame");
+    if (replacement_info.committed_generation == parallel_info.committed_generation)
+        return guiFrameLifecycleFailure(ctx, "parallel-generation-unique");
+    if (!staleGuiFrameHandleRejected(ctx, &stale_handle, &replacement_handle)) return false;
+
+    if (!hardKillGuiFrameProcess(&replacement)) return guiFrameLifecycleFailure(ctx, "replacement-hard-kill");
+    var retained_parallel: r4os.abi.GuiFrameInfo = .{};
+    if (ctx.draw.guiFrameInfo(&parallel_handle, &retained_parallel) != r4os.abi.gui_frame_result_ok or
+        retained_parallel.committed_generation != parallel_info.committed_generation)
+        return guiFrameLifecycleFailure(ctx, "parallel-retained");
+    if (!hardKillGuiFrameProcess(&parallel)) return guiFrameLifecycleFailure(ctx, "parallel-hard-kill");
+
     return true;
 }
 
@@ -4480,8 +4484,9 @@ const RuntimeBaseline = struct {
 };
 
 fn printBaselineDiff(ctx: *DiagApi, before: RuntimeBaseline, after: RuntimeBaseline) void {
-    inline for (.{ "resources", "storage" }) |section| {
+    inline for (.{ "resources", "memory", "storage" }) |section| {
         inline for (@typeInfo(@TypeOf(@field(before, section))).@"struct".fields) |field| {
+            if (comptime field.type != u64 and field.type != u32) continue;
             const first = @field(@field(before, section), field.name);
             const last = @field(@field(after, section), field.name);
             if (first != last) {
