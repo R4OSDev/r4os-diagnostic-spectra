@@ -45,7 +45,7 @@ only when none exists, and closes only that exact host with no foreign windows.
 Commands return without poweroff. The native Core host benchmark keeps its
 separate comparison context in `R4SNES/Benchmark.ps1 -Profile Core`.
 `Tools/StructuredOutput.ps1` is the strict shared file-framing reader; the
-independent SNES Schema-1 export, UUID and DevCenter readback remain with its
+independent SNES Schema-1 export, UUID and validation remain with its
 host owner. See `Docs/Diagnostics/Spectra.txt` in the workspace.
 
 Build through `Build.sh` (Linux) or `Build.bat` (Windows), with PS7 and the configured SDK. `Build.sh test` runs the command/routing/measurement host tests. `module.R4MF` owns the artifact identity; the installed name is `SPECTRA.R4X`.
@@ -77,9 +77,9 @@ scores plus overall. `/AREA:memory` selects a component; `/BASELINE` explicitly
 defines a self-reference. `Tools/Export-StandardBenchmark.ps1` validates the
 guest records and supplies the standalone Schema-1 host export/reference
 comparison. `Baselines/standard-3.reference.json` pins the reference UUID and
-scoring/export hashes; the full run stays in DevCenter or local workspace
-artifacts. The runner resolves the verified local cache or downloads from
-`R4OS_DEVCENTER_API_URL` / `Tools/BenchmarkHost.R4S` (`DEVCENTER_API_URL`).
+scoring/export hashes; the full run stays in local workspace artifacts.
+The runner resolves the verified local reference and fails before guest
+execution if it is missing or differs from its frozen contract.
 Real run exports never belong in Git. `standard-1.reference.json` and
 `standard-2.reference.json` retain the unchanged historical references. Scores
 from different suites are not comparable. Suite 3 compares the same workload
@@ -91,7 +91,7 @@ SMP4 reference remains unchanged. The package also owns the small
 `Fixtures/StandardChild` lifecycle fixture.
 
 `Build.sh test` includes Zig and PS7 result-contract checks. Workload details,
-normal SMP4 integration and the current import fields are documented in
+normal SMP4 integration and the complete local export fields are documented in
 R4OS Docs: `Diagnostics/SpectraStandardBenchmark.txt`.
 
 Since 0.1.3, `METRICS STACKS` also reads the latest resident stack failure per

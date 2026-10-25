@@ -140,7 +140,7 @@ SYSINFO bleibt die allgemeine Systemidentitaets-/Hardwareuebersicht.
 SSHD behaelt R4DIAG PING als reine Transportantwort; R4DIAG TASKS entfaellt.
 Die GUI, weitere Fachbereiche, Gesamtrefactor und das externe Datenbanktool
 werden hier nicht implementiert. Verbindlicher Performancebenchmark ist
-SPECTRA BENCH STANDARD mit Suite 3; Messablauf und DevCenter-Import:
+SPECTRA BENCH STANDARD mit Suite 3; Messablauf und lokale Exportpruefung:
 Agents/Benchmark.txt.
 
 CHECK STORAGE prueft generische Kernelqueues, Cache, Reclaim und Pagerpfade.
@@ -202,7 +202,7 @@ Jeder erfolgreiche Rohsample weist alle N abgeschlossenen Worker nach.
 Scheduler-Ready liegt vor Timerstart; Messbatches je CPU umfassen 16384 Roundtrips,
 512 VM-Zyklen, 16384 IPC-Anfragen, 32 Kindstarts oder acht Dateizyklen.
 Suite 3 verwendet den Deskriptor standard-3.reference.json; der echte
-Referenzlauf liegt im DevCenter oder lokalen Artefaktcache. Keine echten
+Referenzlauf liegt im lokalen Artefaktcache. Keine echten
 Laufexporte/Rohsamples im Repository. standard-1.reference.json und standard-2.reference.json bleiben historisch
 und unveraendert. Suite-uebergreifende Vergleiche sind ungueltig. /AREA:<ID> waehlt einen
 Bereich, /BASELINE einen ausdruecklichen Eigenbezug; /REFERENCE:<Hostexport>
@@ -211,7 +211,7 @@ bei inkompatibler Methode bleiben Scores null mit Grund. STDCHILD.R4X ist die
 feste interne Lifecycle-Fixture desselben Pakets. Voller Verlustfrei-Export
 und lokales Scoring liegen unter Spectra/Tools/Export-StandardBenchmark.ps1.
 Der normale SMP4-Test fuehrt eine begrenzte Phase im bestehenden Runner aus;
-Quick/Build-only bleiben ohne Benchmark. Details und aktuelle Importfelder:
+Quick/Build-only bleiben ohne Benchmark. Details und aktuelle Exportfelder:
 Docs/Diagnostics/SpectraStandardBenchmark.txt.
 
 0.1.51: METRICS DESKTOP ist ausdruecklich passiv und gehoert nicht zu ALL.

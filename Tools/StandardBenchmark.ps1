@@ -22,7 +22,7 @@ function Get-SpectraReferenceFingerprint($Run) {
  $bytes=[Text.Encoding]::UTF8.GetBytes((Get-SpectraCanonical $contract))
  return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
 }
-function Resolve-SpectraReference([string]$Descriptor,[string]$CacheRoot,[string]$ApiUrl='') {
+function Resolve-SpectraReference([string]$Descriptor,[string]$CacheRoot) {
  $pin=Get-Content -LiteralPath $Descriptor -Raw|ConvertFrom-Json -AsHashtable
  $id=([guid]::Parse($pin.run_id)).ToString()
  if($pin.schema -ne 1 -or $pin.scoring_sha256 -cnotmatch '^[0-9a-f]{64}$'){throw 'Invalid reference descriptor.'}
@@ -30,20 +30,11 @@ function Resolve-SpectraReference([string]$Descriptor,[string]$CacheRoot,[string
  if(!(Test-Path -LiteralPath $original)){$original=Join-Path $CacheRoot ($id+'/run.json')}
  $cached=Join-Path $CacheRoot ('References/'+$id+'/reference.json')
  $path=if(Test-Path -LiteralPath $original){$original}else{$cached}
- $download=$null
- if(Test-Path -LiteralPath $path){$run=Get-Content -LiteralPath $path -Raw|ConvertFrom-Json -AsHashtable}
- else{
-  if(!$ApiUrl){throw 'Reference is not cached; configure R4OS_DEVCENTER_API_URL or DEVCENTER_API_URL in Tools/BenchmarkHost.R4S.'}
-  $download=Invoke-WebRequest -Method Get -Uri ($ApiUrl.TrimEnd('/')+'/api/v1/benchmark-runs/'+$id) -TimeoutSec 30
-  $run=$download.Content|ConvertFrom-Json -AsHashtable
- }
+ if(!(Test-Path -LiteralPath $path)){throw ('Frozen reference is not available locally: '+$id+'. Restore its original run.json or verified reference.json under '+$CacheRoot+'.')}
+ $run=Get-Content -LiteralPath $path -Raw|ConvertFrom-Json -AsHashtable
  if($run.run_id -cne $id -or $run.suite_version -cne $pin.suite_version -or $run.scoring_version -cne $pin.scoring_version -or
-    (Get-SpectraReferenceFingerprint $run) -cne $pin.scoring_sha256){throw 'Cached/downloaded reference differs from its frozen scoring contract.'}
+    (Get-SpectraReferenceFingerprint $run) -cne $pin.scoring_sha256){throw 'Local reference differs from its frozen scoring contract.'}
  if($path -ceq $original -and (Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant() -cne $pin.original_export_sha256){throw 'Original reference export was modified.'}
- if($download){
-  [IO.Directory]::CreateDirectory((Split-Path $cached -Parent))|Out-Null
-  [IO.File]::WriteAllText($cached,$download.Content,[Text.UTF8Encoding]::new($false))
- }
  return $path
 }
 function Get-SpectraCanonical($Value) {
