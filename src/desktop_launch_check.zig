@@ -99,7 +99,8 @@ pub fn run(check: anytype, _: *r.App) !void {
         .physical_input_or_visibility = @as(?bool, null),
     });
     if (observations == 0 or scene_inputs == 0 or !frame_overlap) return error.NoDesktopFramesDuringProductiveLoad;
-    try guiHelper(check, &sys);
+    try guiHelper(check, &sys, "CALC.R4X", "");
+    try guiHelper(check, &sys, "EXPLORER.R4X", "C:\\");
 }
 fn exchange(sys: *const r.r4sys.Context, handle: u32, op: u16, request: w.Message) !w.Message {
     var bytes: [w.size]u8 = undefined;
@@ -114,6 +115,9 @@ fn exchange(sys: *const r.r4sys.Context, handle: u32, op: u16, request: w.Messag
 }
 fn retireHosted(sys: *const r.r4sys.Context, child: a.ProgramProcessHandle) bool {
     _ = sys.programHandleKill(&child);
+    return waitHostedGone(sys, child);
+}
+fn waitHostedGone(sys: *const r.r4sys.Context, child: a.ProgramProcessHandle) bool {
     const start = sys.ticks();
     while (sys.ticks() -% start < 4000) {
         var info: a.ProgramInstanceInfo = .{};
@@ -141,9 +145,10 @@ fn drainProduct(check: anytype, sys: *const r.r4sys.Context, broker: u32, reques
     return false;
 }
 
-fn guiHelper(check: anytype, sys: *const r.r4sys.Context) !void {
+fn guiHelper(check: anytype, sys: *const r.r4sys.Context, target: []const u8, arguments: []const u8) !void {
     var helper: a.ProgramProcessHandle = .{};
-    const args = "/JSON /WAIT:10000 /WAITFRAME \"C:\\R4OS\\SOFTWARE\\DESKTOP\\CALC.R4X\"";
+    var buffer: [128]u8 = undefined;
+    const args = try std.fmt.bufPrintZ(&buffer, "/JSON /WAIT:10000 /WAITFRAME \"C:\\R4OS\\SOFTWARE\\DESKTOP\\{s}\" {s}", .{ target, arguments });
     if (sys.programSpawnHandle("C:\\R4OS\\SOFTWARE\\TERMINAL\\DESKRUN.R4X", args, .console, &helper) != 0) return error.GuiLaunchHelper;
     var helper_reaped = false;
     defer if (!helper_reaped) {
@@ -174,7 +179,7 @@ fn guiHelper(check: anytype, sys: *const r.r4sys.Context) !void {
     var alive: a.ProgramInstanceInfo = .{};
     if (sys.programHandleStatus(&child, &alive) != 0 or alive.state == @intFromEnum(a.ProgramInstanceState.done)) return error.GuiChildLostWithHelper;
     const actual = child;
-    if (!retireHosted(sys, child)) return error.GuiLaunchDesktopReap;
+    if (sys.programHandleRequestClose(&child) != 0 or !waitHostedGone(sys, child)) return error.GuiLaunchDesktopReap;
     child = .{};
-    check.out.record("async-gui-launch", "DESKTOP", 0, .{ .helper = helper, .process = actual, .content_generation = value.content, .survives_helper_reap = true, .reap_owner = @as([]const u8, "Desktop"), .physical_visibility = @as(?bool, null) });
+    check.out.record("async-gui-launch", "DESKTOP", 0, .{ .target = target, .helper = helper, .process = actual, .content_generation = value.content, .survives_helper_reap = true, .close_mode = @as([]const u8, "cooperative; Desktop reap"), .reap_owner = @as([]const u8, "Desktop"), .physical_visibility = @as(?bool, null) });
 }
