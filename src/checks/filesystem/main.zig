@@ -56,6 +56,15 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     var ok = true;
 
     ctx.println("SPECTRA FILESYSTEM");
+    if (containsIgnoreCase(app.args(), "/DIRBATCH")) {
+        @import("directory_batch.zig").run(&ctx, files, app.args()) catch |err| {
+            ctx.write("SPECTRA FILESYSTEM directory-batch: FAILED reason=");
+            ctx.println(@errorName(err));
+            return 1;
+        };
+        ctx.println("SPECTRA FILESYSTEM result: OK");
+        return 0;
+    }
     if (containsIgnoreCase(app.args(), "/NAMES")) {
         @import("unicode_names.zig").run(&ctx, &dev) catch |err| {
             ctx.write("SPECTRA FILESYSTEM names: FAILED reason=");
