@@ -65,6 +65,15 @@ pub fn r4_app_main(app: *r4os.App) i32 {
         ctx.println("SPECTRA FILESYSTEM result: OK");
         return 0;
     }
+    if (containsIgnoreCase(app.args(), "/METADATAIO")) {
+        @import("metadata_io.zig").run(&ctx, &dev) catch |err| {
+            ctx.write("SPECTRA FILESYSTEM metadata-io: FAILED reason=");
+            ctx.println(@errorName(err));
+            return 1;
+        };
+        ctx.println("SPECTRA FILESYSTEM result: OK");
+        return 0;
+    }
     if (containsIgnoreCase(app.args(), "/READAHEAD")) {
         @import("read_ahead.zig").run(&ctx, &dev, reclaimPageCacheToPolicyFloor) catch |err| {
             ctx.write("SPECTRA FILESYSTEM readahead: FAILED reason=");
