@@ -5830,9 +5830,9 @@ const App = struct {
         self.sys.write(" sleepBad=");
         self.sys.printU64(summary.lock_sleep_under_no_sleep_lock);
         self.sys.write(" held=");
-        self.sys.printU64(summary.lock_held_slots_used);
+        if (self.detailEnabled()) self.sys.printU64(summary.lock_held_slots_used) else self.sys.write("unavailable(detail-disabled)");
         self.sys.write(" maxDepth=");
-        self.sys.printU64(summary.lock_max_depth);
+        if (self.detailEnabled()) self.sys.printU64(summary.lock_max_depth) else self.sys.write("unavailable(detail-disabled)");
         self.sys.println("");
 
         self.sys.write("  FPU lazy: saves=");

@@ -257,7 +257,13 @@ fn detailField(group: []const u8, comptime name: []const u8) bool {
     if ((std.mem.eql(u8, group, "irq") or std.mem.eql(u8, group, "work") or std.mem.eql(u8, group, "ipc_timing")) and std.mem.endsWith(u8, name, "_ns") and !std.mem.startsWith(u8, name, "clock_") and !std.mem.endsWith(u8, name, "_threshold_ns")) return true;
     if (std.mem.startsWith(u8, name, "service_lock_") and (std.mem.endsWith(u8, name, "_ns") or std.mem.eql(u8, name, "service_lock_timing_unavailable"))) return true;
     if (std.mem.eql(u8, name, "starvation_warnings") or std.mem.eql(u8, name, "scheduler_ready_waiting_max_ticks")) return true;
-    if (std.mem.eql(u8, group, "summary") and (std.mem.eql(u8, name, "lock_order_violations") or std.mem.eql(u8, name, "lock_sleep_checks") or std.mem.eql(u8, name, "lock_sleep_under_lock") or std.mem.eql(u8, name, "lock_sleep_under_no_sleep_lock"))) return true;
+    if (comptime (std.mem.eql(u8, name, "lock_order_violations") or
+        std.mem.eql(u8, name, "lock_sleep_checks") or
+        std.mem.eql(u8, name, "lock_sleep_under_lock") or
+        std.mem.eql(u8, name, "lock_sleep_under_no_sleep_lock") or
+        std.mem.eql(u8, name, "lock_held_slots_used") or
+        std.mem.eql(u8, name, "lock_max_depth") or
+        std.mem.eql(u8, name, "lock_tracking_drops"))) return std.mem.eql(u8, group, "summary");
     if (std.mem.eql(u8, group, "work") and (std.mem.eql(u8, name, "timing_unavailable") or std.mem.eql(u8, name, "critical_timing_unavailable") or std.mem.eql(u8, name, "long_callbacks"))) return true;
     return false;
 }

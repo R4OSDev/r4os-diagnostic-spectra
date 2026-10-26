@@ -8,6 +8,25 @@ const read_bytes = 512 * 1024 + 37;
 const rounds = 32;
 const marker = "R4OS_READERS_FIXTURE=PRIVATE_TEST\n";
 
+// Passive observations at the two worker edges; neither pins placement nor
+// claims to trace the CPU of every byte read. Keep the overlap oracle strict.
+const Location = struct {
+    status: i32 = abi.thread_error_invalid,
+    flags: u32 = 0,
+    home: u32 = abi.thread_placement_cpu_none,
+    running: u32 = abi.thread_placement_cpu_none,
+    allowed: u64 = 0,
+};
+fn location(sys: *const r4os.r4sys.Context) Location {
+    var handle: abi.ProgramJoinHandle = .{};
+    const status = sys.threadCurrentHandle(&handle);
+    if (status != abi.thread_ok) return .{ .status = status };
+    var info: abi.ThreadPlacementInfo = .{};
+    var cpus = [_]u64{0};
+    const result = sys.threadPlacementGet(&handle, &info, &cpus);
+    return .{ .status = result, .flags = info.flags, .home = info.home_cpu, .running = info.running_cpu, .allowed = cpus[0] };
+}
+
 const Work = struct {
     sys: *const r4os.r4sys.Context,
     ready: *u32,
@@ -20,6 +39,8 @@ const Work = struct {
     path: [*:0]const u8,
     renamed: [*:0]const u8,
     buffer: []u8,
+    started: Location = .{},
+    finished: Location = .{},
 };
 fn pattern(index: usize, seed: usize) u8 {
     return @intCast((index * 17 + index / 251 + seed) & 255);
@@ -30,10 +51,12 @@ fn valid(bytes: []const u8, offset: usize, seed: usize) bool {
 }
 fn worker(raw: u64) callconv(.c) i32 {
     const w: *Work = @ptrFromInt(raw);
+    w.started = location(w.sys);
     _ = @atomicRmw(u32, w.ready, .Add, 1, .release);
     _ = w.sys.notificationNotify(w.ready_event, 1);
     if (w.sys.notificationWait(w.start_event, 0, abi.thread_wait_forever) != abi.notification_ok) return 1;
     defer @atomicStore(u32, &w.done, 1, .release);
+    defer w.finished = location(w.sys);
     if (w.index == 2) {
         if (w.sys.notificationWait(w.write_event, 0, abi.thread_wait_forever) != abi.notification_ok) return 2;
         for (w.buffer, 0..) |*byte, index| byte.* = pattern(index, 91);
@@ -131,14 +154,20 @@ fn phase(sys: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context, letter:
     }
     if (sys.notificationNotify(events[1], 3) != abi.notification_ok) ok = false;
     var overlap = false;
+    var observations: u64 = 0;
+    var both_in_flight: u64 = 0;
+    var active_peak: u64 = 0;
     const deadline = sys.ticks() + 500;
     if (spawned == work.len) while (sys.ticks() < deadline) {
+        observations += 1;
         if (@atomicLoad(u32, &work[0].done, .acquire) != 0 and @atomicLoad(u32, &work[1].done, .acquire) != 0) break;
         if (@atomicLoad(u32, &work[0].in_flight, .acquire) != 0 and @atomicLoad(u32, &work[1].in_flight, .acquire) != 0) {
+            both_in_flight += 1;
             const summary = dev.performanceSummary() orelse {
                 ok = false;
                 break;
             };
+            active_peak = @max(active_peak, summary.fs_active_requests);
             if (summary.fs_active_requests >= 2) {
                 overlap = true;
                 break;
@@ -206,7 +235,22 @@ fn phase(sys: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context, letter:
     sys.printU64(after.fs_cache_hits -| before.fs_cache_hits);
     sys.write(" misses=");
     sys.printU64(after.fs_cache_misses -| before.fs_cache_misses);
+    sys.write(" observations=");
+    sys.printU64(observations);
+    sys.write(" bothInFlight=");
+    sys.printU64(both_in_flight);
+    sys.write(" observedActivePeak=");
+    sys.printU64(active_peak);
+    sys.write(" globalActivePeakBefore/After=");
+    sys.printU64(before.fs_parallel_active_max);
+    sys.write("/");
+    sys.printU64(after.fs_parallel_active_max);
     sys.println("");
+    for (work[0..spawned], 0..) |w, index| {
+        var line: [256]u8 = undefined;
+        const text = std.fmt.bufPrint(&line, "SPECTRA FILESYSTEM reader-context {c}:{d} start(status={d},flags={d},home={d},running={d},allowed={X}) end(status={d},flags={d},home={d},running={d},allowed={X})", .{ letter, index, w.started.status, w.started.flags, w.started.home, w.started.running, w.started.allowed, w.finished.status, w.finished.flags, w.finished.home, w.finished.running, w.finished.allowed }) catch "reader-context formatting failed";
+        sys.println(text);
+    }
     if (!ok or !overlap or !busy_ok or !mount_ok or !cache_ok) return error.ReaderContract;
 }
 pub fn run(sys: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context) bool {
