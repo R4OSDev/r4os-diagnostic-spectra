@@ -24,6 +24,7 @@ pub const Check = struct {
     request_item: u64 = item_id,
     resource_group: []const u8 = "DESKTOP",
     cancelled: bool = false,
+    launch_cleanup_ack: bool = true,
     desk: ?r.r4desk.Context = null,
     capture_demand: bool = false,
     capture_override: bool = false,
@@ -31,7 +32,10 @@ pub const Check = struct {
     screenshot_intent: bool = false,
 
     pub fn checkDeadline(self: *Check) !void {
-        if (self.sys.programShouldClose()) { self.cancelled = true; return error.Cancelled; }
+        if (self.sys.programShouldClose()) {
+            self.cancelled = true;
+            return error.Cancelled;
+        }
         if (self.sys.ticks() >= self.deadline) return error.Timeout;
         if (self.out.failed) return error.Output;
     }
@@ -54,8 +58,7 @@ pub const Check = struct {
             return error.DesktopUnavailable;
         }
         var bytes: [wire.request_size]u8 = undefined;
-        wire.encodeRequest(&bytes, .{ .op = op, .caller = id(self.caller), .target = target, .dx = dx, .dy = dy,
-            .item = self.request_item, .deadline_tick = self.deadline });
+        wire.encodeRequest(&bytes, .{ .op = op, .caller = id(self.caller), .target = target, .dx = dx, .dy = dy, .item = self.request_item, .deadline_tick = self.deadline });
         var response: [wire.response_size]u8 = undefined;
         var header: a.ServiceMessageHeader = .{};
         const got = self.sys.serviceCall(self.connection, wire.operation, &bytes, &header, &response, self.sys.ticksFromMilliseconds(3000));
@@ -92,15 +95,15 @@ pub const Check = struct {
             var owner: a.ProgramInstanceInfo = .{};
             const code = self.sys.programHandleStatus(&self.connection_owner, &owner);
             if (code == a.program_handle_error_stale or code == a.program_handle_error_not_found or
-                (code == 0 and owner.state == @intFromEnum(a.ProgramInstanceState.done))) {
+                (code == 0 and owner.state == @intFromEnum(a.ProgramInstanceState.done)))
+            {
                 self.retired_connections += 1;
                 break;
             }
             // Endpoint retirement wakes the blocked caller before the
             // provider's process completion is necessarily published.
             if (self.sys.ticks() -% started >= self.sys.ticksFromMilliseconds(1000)) {
-                self.out.record("connection-release", "DESKTOP", 0, .{ .handle = self.connection,
-                    .service = self.connection_owner, .close_status = status, .owner_status = code, .owner_state = owner.state });
+                self.out.record("connection-release", "DESKTOP", 0, .{ .handle = self.connection, .service = self.connection_owner, .close_status = status, .owner_status = code, .owner_state = owner.state });
                 return false;
             }
             self.sys.sleepTicks(1);
@@ -142,7 +145,8 @@ pub const Check = struct {
             const result = self.call(.snapshot, id(self.handles[index]), 0, 0) catch |err| {
                 if (err != error.NotFound) return err;
                 if (self.sys.ticks() -% start >= self.sys.ticksFromMilliseconds(5000)) return error.WindowTimeout;
-                try self.pause(50); continue;
+                try self.pause(50);
+                continue;
             };
             if (result.gui_revision != 0 and result.flags & wire.geometry_matches != 0) return result;
             if (self.sys.ticks() -% start >= self.sys.ticksFromMilliseconds(5000)) return error.WindowGeometry;
@@ -152,15 +156,10 @@ pub const Check = struct {
     fn tray(self: *Check, operation: u16) !a.TrayServiceResponse {
         var service: a.ServiceInfo = .{};
         if (self.sys.serviceOpen(a.window_service_name, &service) != 0) return error.TrayUnavailable;
-        var request_value: a.TrayServiceRequest = .{ .owner = self.caller, .item_id = item_id,
-            .item_revision = 1, .item_flags = a.tray_item_flag_visible | a.tray_item_flag_enabled,
-            .icon_width = a.tray_icon_width, .icon_height = a.tray_icon_height, .icon_format = a.tray_icon_format_argb32,
-            .icon = @splat(0xff4080e0), .after_sequence = self.tray_sequence,
-            .deadline_tick = self.sys.ticks() +| self.sys.ticksFromMilliseconds(500) };
+        var request_value: a.TrayServiceRequest = .{ .owner = self.caller, .item_id = item_id, .item_revision = 1, .item_flags = a.tray_item_flag_visible | a.tray_item_flag_enabled, .icon_width = a.tray_icon_width, .icon_height = a.tray_icon_height, .icon_format = a.tray_icon_format_argb32, .icon = @splat(0xff4080e0), .after_sequence = self.tray_sequence, .deadline_tick = self.sys.ticks() +| self.sys.ticksFromMilliseconds(500) };
         var reply: a.TrayServiceResponse = .{};
         var header: a.ServiceMessageHeader = .{};
-        const got = self.sys.serviceCall(service.handle, operation, std.mem.asBytes(&request_value), &header,
-            std.mem.asBytes(&reply), self.sys.ticksFromMilliseconds(1000));
+        const got = self.sys.serviceCall(service.handle, operation, std.mem.asBytes(&request_value), &header, std.mem.asBytes(&reply), self.sys.ticksFromMilliseconds(1000));
         const closed = self.sys.serviceClose(service.handle);
         if (closed != 0) return error.TrayConnectionClose;
         if (got != @sizeOf(a.TrayServiceResponse) or header.status != 0 or reply.result != a.tray_result_ok or
@@ -195,20 +194,29 @@ pub const Check = struct {
         return allow_kill or exit_code == 0;
     }
     pub fn cleanup(self: *Check) bool {
-        var ok = true;
+        var ok = self.launch_cleanup_ack;
         self.deadline = self.sys.ticks() +| self.sys.ticksFromMilliseconds(10000);
         if (!self.closeConnection()) ok = false;
-        if (self.desk) |desk| if (!self.releaseCapture(&desk)) { ok = false; };
+        if (self.desk) |desk| if (!self.releaseCapture(&desk)) {
+            ok = false;
+        };
         if (!self.releaseScreenshot()) ok = false;
         if (self.tray_owned) {
-            if (self.tray(a.tray_service_op_remove)) |_| self.tray_owned = false else |_| { ok = false; }
+            if (self.tray(a.tray_service_op_remove)) |_| self.tray_owned = false else |_| {
+                ok = false;
+            }
         }
-        for (0..2) |index| if (!self.closeChild(index, true)) { ok = false; };
+        for (0..2) |index| if (!self.closeChild(index, true)) {
+            ok = false;
+        };
         if (self.session) {
             const start = self.sys.ticks();
             while (self.session) {
                 if (self.request(.end, .{}, 0, 0)) |_| self.session = false else |err| {
-                    if (err != error.BusyOrUserActivity or self.sys.ticks() -% start >= self.sys.ticksFromMilliseconds(3000)) { ok = false; break; }
+                    if (err != error.BusyOrUserActivity or self.sys.ticks() -% start >= self.sys.ticksFromMilliseconds(3000)) {
+                        ok = false;
+                        break;
+                    }
                     self.sys.sleepTicks(1);
                 }
             }
@@ -225,7 +233,9 @@ pub const Check = struct {
             if (desk.remoteFrameRelease() >= 0) self.capture_demand = false else ok = false;
         }
         if (self.capture_override) {
-            if (self.request(.capture, .{}, 0, 0)) |_| self.capture_override = false else |_| { ok = false; }
+            if (self.request(.capture, .{}, 0, 0)) |_| self.capture_override = false else |_| {
+                ok = false;
+            }
         }
         return ok;
     }
@@ -247,12 +257,11 @@ pub const Check = struct {
         self.screenshot_intent = false;
         return true;
     }
-    fn work(self: *Check, app: *r.App, restart: bool, audio: bool, capture: bool) !void {
+    fn work(self: *Check, app: *r.App, restart: bool, audio: bool, capture: bool, launch: bool) !void {
         for (paths) |path| if (!self.sys.exists(path)) return error.RequiredFullFixtureMissing;
         const begin = try self.beginSession(.begin);
         if ((restart or audio or capture) and begin.flags & wire.isolated == 0) return error.RequiresIsolatedDesktopBoot;
-        self.out.record("owner", "DESKTOP", 0, .{ .contract_version = @as(u32, 2), .desktop = self.desktop,
-            .caller = self.caller, .isolated_boot = begin.flags & wire.isolated != 0, .deadline_tick = self.deadline });
+        self.out.record("owner", "DESKTOP", 0, .{ .contract_version = @as(u32, 2), .desktop = self.desktop, .caller = self.caller, .isolated_boot = begin.flags & wire.isolated != 0, .deadline_tick = self.deadline });
         for (paths, 0..) |path, index| {
             if (self.sys.programSpawnHandle(path, "", .gui, &self.handles[index]) != 0 or self.handles[index].instance_id == 0) return error.FixtureSpawn;
             _ = try self.call(.bind, id(self.handles[index]), 0, 0);
@@ -275,6 +284,7 @@ pub const Check = struct {
             const focused = try self.call(.focus, id(self.handles[index]), 0, 0);
             if (focused.flags & wire.focused == 0) return error.Focus;
         }
+        if (launch) try @import("desktop_launch_check.zig").run(self, app);
         // Settle only our final focus/resize events, then compare the actual
         // static and ticking GUI revisions over the original two-second span.
         try self.pause(300);
@@ -285,17 +295,15 @@ pub const Check = struct {
         const timer_after = try self.window(1);
         if (idle_after.gui_revision != idle.gui_revision or timer_after.gui_revision == timer.gui_revision or
             idle_after.idle_timeouts <= idle.idle_timeouts) return error.IdleTwoProducers;
-        self.out.record("windows", "DESKTOP", 0, .{ .initial = initial, .moved = moved, .resized = resized,
-            .idle_revision_before = idle.gui_revision, .idle_revision_after = idle_after.gui_revision,
-            .timer_revision_before = timer.gui_revision, .timer_revision_after = timer_after.gui_revision,
-            .idle_timeouts = idle_after.idle_timeouts - idle.idle_timeouts });
+        self.out.record("windows", "DESKTOP", 0, .{ .initial = initial, .moved = moved, .resized = resized, .idle_revision_before = idle.gui_revision, .idle_revision_after = idle_after.gui_revision, .timer_revision_before = timer.gui_revision, .timer_revision_after = timer_after.gui_revision, .idle_timeouts = idle_after.idle_timeouts - idle.idle_timeouts });
         self.tray_owned = true; // A refused/ambiguous upsert still needs Remove.
         _ = try self.tray(a.tray_service_op_upsert);
         const started = self.sys.ticks();
         while (true) {
             _ = self.call(.tray, .{}, 0, 0) catch |err| {
                 if (err != error.NotFound or self.sys.ticks() -% started >= self.sys.ticksFromMilliseconds(3000)) return err;
-                try self.pause(50); continue;
+                try self.pause(50);
+                continue;
             };
             break;
         }
@@ -323,7 +331,8 @@ pub const Check = struct {
                 };
                 if (current.restart_state == 3) return error.RestartRefused;
                 if (current.restart_state == 2 and current.restart_result == 0 and current.flags & wire.service_available != 0 and current.service_handle != old.service_handle) {
-                    self.out.record("restart", "DESKTOP", 0, .{ .old_service_handle = old.service_handle, .current = current }); break;
+                    self.out.record("restart", "DESKTOP", 0, .{ .old_service_handle = old.service_handle, .current = current });
+                    break;
                 }
                 if (self.sys.ticks() -% restart_start >= self.sys.ticksFromMilliseconds(8000)) return error.RestartTimeout;
                 try self.pause(50);
@@ -338,19 +347,22 @@ pub const Check = struct {
         // shared public snapshot oracle, not copied private Desktop test bodies.
     }
 };
-fn id(handle: a.ProgramProcessHandle) wire.Identity { return .{ .instance = handle.instance_id, .generation = handle.generation }; }
+fn id(handle: a.ProgramProcessHandle) wire.Identity {
+    return .{ .instance = handle.instance_id, .generation = handle.generation };
+}
 
 pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
     if (cli.same(args, "/CANCEL")) return @import("desktop_cancel.zig").run(app, out);
-    var restart = false; var audio = false; var capture = false; var own_host = false;
+    var restart = false;
+    var audio = false;
+    var capture = false;
+    var own_host = false;
+    var launch = false;
     var tokens: cli.Tokens = .{ .input = args };
     while (tokens.next() catch return 2) |token| {
-        if (cli.same(token, "/RESTART") and !restart) restart = true
-        else if (cli.same(token, "/AUDIO") and !audio) audio = true
-        else if (cli.same(token, "/CAPTURE") and !capture) capture = true
-        else if (cli.same(token, "/HOST") and !own_host) own_host = true
-        else return 2;
+        if (cli.same(token, "/RESTART") and !restart) restart = true else if (cli.same(token, "/AUDIO") and !audio) audio = true else if (cli.same(token, "/CAPTURE") and !capture) capture = true else if (cli.same(token, "/HOST") and !own_host) own_host = true else if (cli.same(token, "/LAUNCH") and !launch) launch = true else return 2;
     }
+    if (launch and !own_host) return 2;
     @import("check_context.zig").emit(app, out, "DESKTOP");
     var check: Check = .{ .sys = app.system(), .out = out, .desk = app.desktop() };
     var host: @import("desktop_host_check.zig").Owner = .{};
@@ -367,7 +379,7 @@ pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
         return 1;
     }
     var result: i32 = 0;
-    check.work(app, restart, audio, capture) catch |err| {
+    check.work(app, restart, audio, capture, launch) catch |err| {
         const cancelled = check.cancelled or check.sys.programShouldClose();
         result = if (cancelled) 4 else 1;
         out.unavailable("DESKTOP", if (cancelled) "Cancelled" else @errorName(err));
@@ -378,10 +390,13 @@ pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
         const capture_result = @import("remote_frame_check.zig").run(app, "", out);
         if (capture_result != 0) result = capture_result;
     }
-    if (!host.finish(check.sys, out)) { cleaned = false; result = 1; }
-    if (host.exit_code) |code| if (code != 0) { result = 1; };
-    out.record("result", "DESKTOP", 0, .{ .exit_code = result, .success = result == 0, .cleanup_acknowledged = cleaned,
-        .connections_retired_with_exact_service = check.retired_connections,
-        .input_consumed_by_check = false, .physical_visibility = @as(?bool, null), .cursor_latency_ns = @as(?u64, null) });
+    if (!host.finish(check.sys, out)) {
+        cleaned = false;
+        result = 1;
+    }
+    if (host.exit_code) |code| if (code != 0) {
+        result = 1;
+    };
+    out.record("result", "DESKTOP", 0, .{ .exit_code = result, .success = result == 0, .cleanup_acknowledged = cleaned, .connections_retired_with_exact_service = check.retired_connections, .input_consumed_by_check = false, .physical_visibility = @as(?bool, null), .cursor_latency_ns = @as(?u64, null) });
     return result;
 }
