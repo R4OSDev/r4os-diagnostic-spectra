@@ -352,6 +352,9 @@ fn id(handle: a.ProgramProcessHandle) wire.Identity {
 }
 
 pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
+    var navigation_options = std.mem.tokenizeAny(u8, args, " \t");
+    while (navigation_options.next()) |option| if (cli.same(option, "/NAV")) return @import("explorer_navigation_check.zig").run(app, args, out);
+
     if (cli.same(args, "/CANCEL")) return @import("desktop_cancel.zig").run(app, out);
     var restart = false;
     var audio = false;
