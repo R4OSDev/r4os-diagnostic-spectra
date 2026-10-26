@@ -95,7 +95,22 @@ pub const Controller = struct {
     fn beginStage(self: *Controller) bool {
         if (self.check.handles[0].instance_id != 0 or self.check.handles[1].instance_id != 0) return true;
         if (self.check.session) {
-            _ = self.check.call(.end, .{}, 0, 0) catch return self.headlessSubsystemFailure("stage-retirement");
+            // End can meet a still-retiring owned child or an already empty
+            // reservation. Carry a short cleanup deadline on either path;
+            // the previous benchmark's broad work deadline is not an idle
+            // session lease. Completion still requires the real End reply.
+            self.check.deadline = @min(self.check.deadline, self.ctx.ticks() +| self.ctx.sys.ticksFromMilliseconds(10000));
+            while (true) {
+                _ = self.check.call(.end, .{}, 0, 0) catch |err| {
+                    if (err == error.BusyOrUserActivity or err == error.DesktopBrokerBusy) {
+                        self.ctx.sys.sleepTicks(1);
+                        continue;
+                    }
+                    self.check.out.record("stage-retirement-error", "SUBSYSTEM", 0, .{ .reason = @errorName(err), .now_tick = self.ctx.ticks(), .deadline_tick = self.check.deadline, .output_failed = self.check.out.failed });
+                    return self.headlessSubsystemFailure("stage-retirement");
+                };
+                break;
+            }
             self.check.session = false;
         }
         self.check.deadline = self.ctx.ticks() +| self.ctx.sys.ticksFromMilliseconds(300000);
