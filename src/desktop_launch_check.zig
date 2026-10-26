@@ -8,7 +8,7 @@ const scene = @import("desktop_check");
 const service_path = "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\SVCAPPD.R4X";
 const image = "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\SPECTRA.R4X";
 
-pub fn run(check: anytype, _: *r.App) !void {
+pub fn run(check: anytype, app: *r.App) !void {
     var sys = check.sys;
     var slow: a.ServiceInfo = .{};
     if (sys.serviceInstall("SVCSTALL", service_path, "/HOLD /STALLENDPOINT", a.service_start_manual, "Async Desktop launch fixture", &slow) != 0) return error.LaunchFixtureInstall;
@@ -38,6 +38,21 @@ pub fn run(check: anytype, _: *r.App) !void {
     var args: [128]u8 = undefined;
     try w.copy(&request.args, try std.fmt.bufPrint(&args, "CHECK ASYNC_IO /KILLWAIT {d}", .{slow.handle}));
     try w.copy(&request.title, "Async loader check");
+    // A larger page cache can settle the real load before a scene mutation
+    // crosses the mailbox. This explicit overlap case needs a cold source,
+    // rather than an artificial product delay or a relaxed overlap assertion.
+    const dev = app.devicesLowLevel() orelse return error.LaunchReclaimApi;
+    const preparation = @import("page_cache_probe.zig").toPolicyFloor(&dev);
+    check.out.record("async-launch-preparation", "DESKTOP", 0, .{
+        .cold_filesystem_cache = true,
+        .entries_before = preparation.entries_before,
+        .entries_after = preparation.entries_after,
+        .returned_fs_frames = preparation.fs_frames,
+        .failed_drains = preparation.failed_drains,
+        .bounded_passes = preparation.passes,
+        .product_delay = false,
+    });
+    if (!preparation.ok) return error.LaunchSourceNotCold;
     var receipt = try exchange(&sys, broker.handle, w.submit, request);
     var child: a.ProgramProcessHandle = .{};
     var resolved = false;

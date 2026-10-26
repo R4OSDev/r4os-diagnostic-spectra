@@ -2127,7 +2127,7 @@ const App = struct {
             summary.fs_cache_bulk_write_requests <= summary.fs_cache_bulk_write_sectors / 2 and
             summary.fs_cache_selective_flushes <= summary.fs_cache_flushes and
             summary.fs_cache_selective_writeback_sectors <= summary.fs_cache_writeback_sectors;
-        const cache_policy_ok = summary.fs_cache_policy_version == 2 and
+        const cache_policy_ok = summary.fs_cache_policy_version == 3 and
             summary.fs_cache_policy_device_capacity > 0 and
             summary.fs_cache_policy_device_capacity <= 8 and
             summary.fs_cache_policy_dirty_low_pages > 0 and
@@ -2143,7 +2143,7 @@ const App = struct {
             summary.fs_cache_policy_full_scan_fallbacks == 0 and
             summary.fs_cache_read_ahead_hits <= summary.fs_cache_read_ahead_issued and
             summary.fs_cache_capacity_min_pages == 64 and
-            summary.fs_cache_capacity_max_pages == 512 and
+            summary.fs_cache_capacity_max_pages == 8192 and
             summary.fs_cache_capacity_ram_limit_pages >= summary.fs_cache_capacity_min_pages and
             summary.fs_cache_capacity_ram_limit_pages <= summary.fs_cache_capacity_max_pages and
             summary.fs_cache_capacity_active_limit_pages >= summary.fs_cache_capacity_min_pages and
@@ -6013,10 +6013,21 @@ const App = struct {
             after.fs_cache_capacity > 0 and
             after.fs_cache_sector_bytes == 512 and
             after.fs_cache_entries_used > 0 and
-            after.fs_cache_dirty_entries == 0 and
+            after.fs_cache_dirty_entries <= before.fs_cache_dirty_entries and
             after.fs_cache_read_errors == 0 and
             after.fs_cache_write_errors == 0 and
             after.fs_cache_writeback_errors == 0;
+        // Existing global dirty residency is not owned by these two reads;
+        // autonomous writeback may reduce it. No new dirty page is allowed.
+        self.sys.write("  FS read-through context: dirty=");
+        self.sys.printU64(before.fs_cache_dirty_entries);
+        self.sys.write("->");
+        self.sys.printU64(after.fs_cache_dirty_entries);
+        self.sys.write(" reads=");
+        self.sys.printU64(read_delta);
+        self.sys.write(" hits=");
+        self.sys.printU64(hit_delta);
+        self.sys.println("");
         self.printCheck("FS page cache read-through", ok);
         if (!ok) {
             self.sys.write("  read=");
@@ -7262,7 +7273,10 @@ const App = struct {
         if (requested_frames == 0) requested_frames = 1;
 
         var probe: ?r4os.abi.ProgramMemoryReclaimProbe = null;
-        const max_reclaim_attempts: u32 = 16;
+        // The probe caps each request at64 frames and reclaims clean FS
+        // residency before caller-owned VM pages. Preserve real VM eviction,
+        // pinned/data checks; budget the actual enlarged cache first.
+        const max_reclaim_attempts: u32 = @intCast((before.fs_cache_capacity_max_pages + 63) / 64 + 16);
         var attempts: u32 = 0;
         while (attempts < max_reclaim_attempts) : (attempts += 1) {
             const current = self.dev.memoryReclaimProbe(requested_frames) orelse {

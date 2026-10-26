@@ -56,6 +56,15 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     var ok = true;
 
     ctx.println("SPECTRA FILESYSTEM");
+    if (containsIgnoreCase(app.args(), "/CACHEBUDGET")) {
+        @import("page_cache_budget.zig").run(&ctx, &dev, reclaimPageCacheToPolicyFloor) catch |err| {
+            ctx.write("SPECTRA FILESYSTEM cache-budget: FAILED reason=");
+            ctx.println(@errorName(err));
+            return 1;
+        };
+        ctx.println("SPECTRA FILESYSTEM result: OK");
+        return 0;
+    }
     if (containsIgnoreCase(app.args(), "/DIRBATCH")) {
         @import("directory_batch.zig").run(&ctx, files, app.args()) catch |err| {
             ctx.write("SPECTRA FILESYSTEM directory-batch: FAILED reason=");
@@ -1120,7 +1129,7 @@ fn checkLargeStreaming(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Co
         if (after_autonomous) |progress_summary| {
             background_drain_delta = delta(progress_summary.fs_cache_policy_background_drains, initial_summary.fs_cache_policy_background_drains);
             background_sector_delta = delta(progress_summary.fs_cache_policy_background_sectors, initial_summary.fs_cache_policy_background_sectors);
-            policy_contract_ok = progress_summary.fs_cache_policy_version == 2 and
+            policy_contract_ok = progress_summary.fs_cache_policy_version == 3 and
                 progress_summary.fs_cache_policy_worker_started == 1 and
                 progress_summary.fs_cache_policy_worker_task_id != 0 and
                 progress_summary.fs_cache_policy_dirty_low_pages > 0 and
@@ -1128,7 +1137,7 @@ fn checkLargeStreaming(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Co
                 progress_summary.fs_cache_policy_background_page_budget > 0 and
                 progress_summary.fs_cache_policy_background_page_budget <= progress_summary.fs_cache_policy_dirty_low_pages and
                 progress_summary.fs_cache_capacity_min_pages == 64 and
-                progress_summary.fs_cache_capacity_max_pages == 512 and
+                progress_summary.fs_cache_capacity_max_pages == 8192 and
                 progress_summary.fs_cache_capacity_ram_limit_pages >= progress_summary.fs_cache_capacity_min_pages and
                 progress_summary.fs_cache_capacity_ram_limit_pages <= progress_summary.fs_cache_capacity_max_pages and
                 progress_summary.fs_cache_capacity_active_limit_pages >= progress_summary.fs_cache_capacity_min_pages and
@@ -1259,7 +1268,7 @@ fn checkLargeStreaming(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Co
                 read_caller_bytes_delta >= pagecache_multifill_probe_bytes and
                 read_publish_locks_delta > 0;
             capacity_ok = read_after.fs_cache_capacity_min_pages == 64 and
-                read_after.fs_cache_capacity_max_pages == 512 and
+                read_after.fs_cache_capacity_max_pages == 8192 and
                 read_after.fs_cache_capacity_ram_limit_pages >= read_after.fs_cache_capacity_min_pages and
                 read_after.fs_cache_capacity_ram_limit_pages <= read_after.fs_cache_capacity_max_pages and
                 read_after.fs_cache_capacity_active_limit_pages >= read_after.fs_cache_capacity_min_pages and
@@ -2205,42 +2214,7 @@ fn memEql(a: []const u8, b: []const u8) bool {
     return true;
 }
 
-const PageCacheColdReclaim = struct {
-    ok: bool = false,
-    passes: u64 = 0,
-    fs_frames: u64 = 0,
-    failed_drains: u64 = 0,
-    entries_before: u64 = 0,
-    entries_after: u64 = 0,
-};
-
-fn reclaimPageCacheToPolicyFloor(dev: *const r4os.r4dev.Context) PageCacheColdReclaim {
-    var result = PageCacheColdReclaim{};
-    var snapshot = dev.performanceSummary() orelse return result;
-    result.entries_before = snapshot.fs_cache_entries_used;
-    result.entries_after = result.entries_before;
-    const floor: u64 = snapshot.fs_cache_capacity_min_pages;
-    const speculation: u64 = snapshot.fs_cache_read_ahead_window_max_pages;
-    if (floor == 0 or floor >= snapshot.fs_cache_capacity_max_pages) return result;
-
-    // A reclaim request is capped at 64 frames by R4DEV. Cached kernel
-    // stacks are reclaimed before filesystem pages, so allow several bounded
-    // passes and use the observed cache residency as the stop condition.
-    while (result.entries_after > floor and result.passes < 32) {
-        const requested: u32 = @intCast(@min(@as(u64, 64), result.entries_after - floor));
-        const probe = dev.memoryReclaimProbe(requested) orelse break;
-        result.passes += 1;
-        result.fs_frames +%= probe.fs_returned_frames;
-        result.failed_drains +%= probe.failed_drains;
-        const next = dev.performanceSummary() orelse break;
-        const previous_entries = result.entries_after;
-        snapshot = next;
-        result.entries_after = snapshot.fs_cache_entries_used;
-        if (result.entries_after >= previous_entries and probe.returned_frames == 0) break;
-    }
-    result.ok = result.failed_drains == 0 and result.entries_after <= floor + speculation;
-    return result;
-}
+const reclaimPageCacheToPolicyFloor = @import("../../page_cache_probe.zig").toPolicyFloor;
 
 fn delta(after: u64, before: u64) u64 {
     return if (after >= before) after - before else 0;
