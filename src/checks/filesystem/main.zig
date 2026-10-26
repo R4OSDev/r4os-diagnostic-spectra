@@ -65,6 +65,15 @@ pub fn r4_app_main(app: *r4os.App) i32 {
         ctx.println("SPECTRA FILESYSTEM result: OK");
         return 0;
     }
+    if (containsIgnoreCase(app.args(), "/READAHEAD")) {
+        @import("read_ahead.zig").run(&ctx, &dev, reclaimPageCacheToPolicyFloor) catch |err| {
+            ctx.write("SPECTRA FILESYSTEM readahead: FAILED reason=");
+            ctx.println(@errorName(err));
+            return 1;
+        };
+        ctx.println("SPECTRA FILESYSTEM result: OK");
+        return 0;
+    }
     if (containsIgnoreCase(app.args(), "/DIRBATCH")) {
         @import("directory_batch.zig").run(&ctx, files, app.args()) catch |err| {
             ctx.write("SPECTRA FILESYSTEM directory-batch: FAILED reason=");
@@ -1129,7 +1138,7 @@ fn checkLargeStreaming(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Co
         if (after_autonomous) |progress_summary| {
             background_drain_delta = delta(progress_summary.fs_cache_policy_background_drains, initial_summary.fs_cache_policy_background_drains);
             background_sector_delta = delta(progress_summary.fs_cache_policy_background_sectors, initial_summary.fs_cache_policy_background_sectors);
-            policy_contract_ok = progress_summary.fs_cache_policy_version == 3 and
+            policy_contract_ok = progress_summary.fs_cache_policy_version == 4 and
                 progress_summary.fs_cache_policy_worker_started == 1 and
                 progress_summary.fs_cache_policy_worker_task_id != 0 and
                 progress_summary.fs_cache_policy_dirty_low_pages > 0 and
@@ -1143,10 +1152,8 @@ fn checkLargeStreaming(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Co
                 progress_summary.fs_cache_capacity_active_limit_pages >= progress_summary.fs_cache_capacity_min_pages and
                 progress_summary.fs_cache_capacity_active_limit_pages <= progress_summary.fs_cache_capacity_ram_limit_pages and
                 progress_summary.fs_cache_capacity_pressure_level <= 3 and
-                progress_summary.fs_cache_read_ahead_window_pages == 0 and
-                progress_summary.fs_cache_read_ahead_window_max_pages == 0 and
-                progress_summary.fs_cache_read_ahead_requests == 0 and
-                progress_summary.fs_cache_read_ahead_issued == 0 and
+                progress_summary.fs_cache_read_ahead_window_pages <= progress_summary.fs_cache_read_ahead_window_max_pages and
+                progress_summary.fs_cache_read_ahead_window_max_pages <= 4 and
                 progress_summary.fs_cache_policy_background_errors == initial_summary.fs_cache_policy_background_errors and
                 progress_summary.fs_cache_policy_full_scan_fallbacks == initial_summary.fs_cache_policy_full_scan_fallbacks;
             autonomous_progress_ok = background_drain_delta > 0 and background_sector_delta > 0;
@@ -1274,10 +1281,8 @@ fn checkLargeStreaming(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Co
                 read_after.fs_cache_capacity_active_limit_pages >= read_after.fs_cache_capacity_min_pages and
                 read_after.fs_cache_capacity_active_limit_pages <= read_after.fs_cache_capacity_ram_limit_pages and
                 read_after.fs_cache_capacity_pressure_level <= 3 and
-                read_after.fs_cache_read_ahead_window_pages == 0 and
-                read_after.fs_cache_read_ahead_window_max_pages == 0 and
-                read_after.fs_cache_read_ahead_requests == 0 and
-                read_after.fs_cache_read_ahead_issued == 0;
+                read_after.fs_cache_read_ahead_window_pages <= read_after.fs_cache_read_ahead_window_max_pages and
+                read_after.fs_cache_read_ahead_window_max_pages <= 4;
         }
     }
 
@@ -1417,7 +1422,7 @@ fn checkLargeStreaming(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Co
     ctx.write("/");
     ctx.printU64(read_caller_bytes_delta);
     ctx.write(" readAhead=");
-    ctx.write(if (capacity_ok) "off" else "invalid");
+    ctx.write(if (capacity_ok) "bounded" else "invalid");
     ctx.write(" reclaim=");
     ctx.printU64(cold_reclaim.passes);
     ctx.write("/");

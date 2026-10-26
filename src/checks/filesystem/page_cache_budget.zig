@@ -16,7 +16,7 @@ fn check(data: []const u8, offset: u64) bool {
     }
     return true;
 }
-fn read(sys: *const r.r4sys.Context, offset: u64, data: []u8) bool {
+pub fn read(sys: *const r.r4sys.Context, offset: u64, data: []u8) bool {
     const position = std.math.cast(u32, offset) orelse return false;
     return sys.fileReadAt(path, position, data) == data.len and check(data, offset);
 }

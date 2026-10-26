@@ -2127,7 +2127,7 @@ const App = struct {
             summary.fs_cache_bulk_write_requests <= summary.fs_cache_bulk_write_sectors / 2 and
             summary.fs_cache_selective_flushes <= summary.fs_cache_flushes and
             summary.fs_cache_selective_writeback_sectors <= summary.fs_cache_writeback_sectors;
-        const cache_policy_ok = summary.fs_cache_policy_version == 3 and
+        const cache_policy_ok = summary.fs_cache_policy_version == 4 and
             summary.fs_cache_policy_device_capacity > 0 and
             summary.fs_cache_policy_device_capacity <= 8 and
             summary.fs_cache_policy_dirty_low_pages > 0 and
@@ -2149,10 +2149,8 @@ const App = struct {
             summary.fs_cache_capacity_active_limit_pages >= summary.fs_cache_capacity_min_pages and
             summary.fs_cache_capacity_active_limit_pages <= summary.fs_cache_capacity_ram_limit_pages and
             summary.fs_cache_capacity_pressure_level <= 3 and
-            summary.fs_cache_read_ahead_window_pages == 0 and
-            summary.fs_cache_read_ahead_window_max_pages == 0 and
-            summary.fs_cache_read_ahead_requests == 0 and
-            summary.fs_cache_read_ahead_issued == 0 and
+            summary.fs_cache_read_ahead_window_pages <= summary.fs_cache_read_ahead_window_max_pages and
+            summary.fs_cache_read_ahead_window_max_pages <= 4 and
             summary.fs_cache_capacity_reserved0 == 0 and
             summary.fs_cache_fill_run_pages >= summary.fs_cache_fill_run_requests * 2 and
             summary.fs_cache_fill_run_backend_requests == summary.fs_cache_fill_run_requests + summary.fs_cache_fill_run_retries and
