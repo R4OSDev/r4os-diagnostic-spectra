@@ -1549,16 +1549,16 @@ fn testLifecycleAsyncThreads(ctx: *DiagApi) bool {
     const expected_responses = opened.responses;
     var expected_cancellations = opened.cancellations;
     if (hasArg(ctx.sys.argsRaw(), "/ASYNCQUICK")) {
-        // Each child owns eight requests: four service workers are waiting
-        // and four requests remain queued without a Task. Reuse the existing
+        // Each child owns eight admitted pending Service continuations. No
+        // resident worker stays occupied by their reply waits. Reuse the existing
         // exact process/thread/endpoint cleanup checks, without unrelated
         // global storage-accounting or long memory-churn acceptance.
         for (0..4) |_| {
-            expected_requests += 4;
-            expected_cancellations += 4;
+            expected_requests += 8;
+            expected_cancellations += 8;
             if (!runLifecycleKillWaitCycle(ctx, service_handle, opened.instance_id, expected_requests, expected_responses, expected_cancellations)) return false;
         }
-        ctx.sys.println("SPECTRA LIFECYCLE asyncquick cycles=4 requests=8 running=4 queued=4 threads=3 owner=gone endpoint=empty");
+        ctx.sys.println("SPECTRA LIFECYCLE asyncquick cycles=4 requests=8 pending=8 workers=released queued=0 threads=3 owner=gone endpoint=empty");
         return true;
     }
     const cold = captureRuntimeBaseline(ctx) orelse return programLifecycleFail(ctx, "async cold baseline unavailable");
@@ -3784,7 +3784,7 @@ fn stallRequestQueued(ctx: *DiagApi, endpoint_id: u32, expected_requests: u64, e
     return ctx.sys.serviceStatus(stall_service_name, &info) == r4os.abi.service_api_result_ok and
         info.handle != 0 and info.instance_id == endpoint_id and
         info.state == r4os.abi.service_state_running and
-        info.queue_used == @as(u32, if (hasArg(ctx.sys.argsRaw(), "/ASYNCQUICK")) 4 else 1) and info.requests == expected_requests and info.responses == expected_responses and
+        info.queue_used == @as(u32, if (hasArg(ctx.sys.argsRaw(), "/ASYNCQUICK")) 8 else 1) and info.requests == expected_requests and info.responses == expected_responses and
         info.open_handles == 1;
 }
 
