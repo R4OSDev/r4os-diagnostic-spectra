@@ -17,9 +17,14 @@ const DiagApi = struct {
 pub fn r4_app_main(app: *r4os.App) i32 {
     if (argsEqual(app.args(), "/AP")) return @import("ap.zig").run(app);
     var ctx = DiagApi.init(app) orelse return r4os.abi.err_no_group;
+    if (argsEqual(app.args(), "/INVENTORY")) {
+        if (!@import("inventory_outputs.zig").run(ctx.sys)) return fail(&ctx, "SPECTRA VM inventory output failed");
+        ctx.sys.println("SPECTRA VM result: OK");
+        return 0;
+    }
     if (argsEqual(app.args(), "/HOLDVM")) return holdVmMode(&ctx);
     if (app.args().len != 0) return 2;
-    if (!testR4sysVmApi(&ctx) or !stressVmLifecycle(&ctx)) return 1;
+    if (!testR4sysVmApi(&ctx) or !stressVmLifecycle(&ctx) or !@import("inventory_outputs.zig").run(ctx.sys)) return 1;
     ctx.sys.println("SPECTRA VM result: OK");
     return 0;
 }

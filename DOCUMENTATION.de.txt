@@ -1,8 +1,15 @@
-Spectra - Diagnosewerkzeug 0.1.62
+Spectra - Diagnosewerkzeug 0.1.79
 =============================
 
 Aufrufe
 -------
+CHECK VM /INVENTORY prueft frische, noch nicht physisch belegte Task-/Thread-
+Ausgabepuffer, echte Demand-Faults und genauen VM-Abbau. Der normale VM-Check
+enthaelt den Fall ebenfalls. Maximal16 Epochenversuche; Restart ohne Zeilen
+ist kein Erfolg. Kein Sampler/Extrathread oder Score. Benoetigt den aktuellen
+Kernel mit Ausgabe ausserhalb der Programmsperre; alte410-Quelle haengt an
+einem solchen unberuehrten Task-Puffer. Fachbeleg: Audio/PlaybackProgress.txt.
+
 METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE
 LOGS BOOT|SERVICE
 CHECK BOOT|PERFORMANCE|WORK|THREAD|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP

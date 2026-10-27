@@ -2,6 +2,17 @@
 
 Spectra is R4OS's console tool for kernel measurements, kernel logs, functional checks, explicit benchmarks and opt-in passive Desktop state. It runs through Terminal and SSH. A GUI is deferred; command parsing, collectors/checks and rendering are separate.
 
+Version0.1.79 adds `CHECK VM /INVENTORY`, also included in the default VM
+check. It gives the task/thread inventory providers fresh demand-committed
+caller rows without touching those pages first, then verifies real page
+faults/residency, exact returned identities/layouts and release of both owned
+regions. Epoch restarts publish no rows and are retried at most16 times.
+This explicit bounded check adds no background work. It guards the Kernel412
+fix for publishing caller results after ProgramState admission ends; native410
+froze on the same untouched8192-byte task buffer. STANDARD workloads, scoring
+and reference contracts are unchanged. Runtime receipts and limits belong to
+`Docs/Audio/PlaybackProgress.txt`.
+
 Since0.1.38, `METRICS MICROCODE [/JSON]` copies retained early CPU revision
 receipts. `CHECK SMP /MICROCODE` runs15 synthetic presentation cases and
 passive header, caller-tail and exact CPU/epoch checks. The existing owned
