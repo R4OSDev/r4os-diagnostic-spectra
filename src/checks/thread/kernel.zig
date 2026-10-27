@@ -43,9 +43,10 @@ fn passed(r: Report) bool {
     if (r.selected & abi.kernel_scheduler_check_case_directed != 0 and r.role_mask != 15) return false;
     if (r.selected & abi.kernel_scheduler_check_case_deadlines != 0 and r.deadline_tasks != 65) return false;
     // Native fairness owns three real deadline tickets (one cancelled),
-    // while FPU owns two. Every selected case must retain its exact receipts.
+    // while FPU owns two and its continuation witness owns four. Every
+    // selected case must retain its exact receipts, including cancellation.
     const expected_work: u64 = @as(u64, if (r.selected & abi.kernel_scheduler_check_case_fairness != 0) 3 else 0) +
-        @as(u64, if (r.selected & abi.kernel_scheduler_check_case_fpu != 0) 2 else 0);
+        @as(u64, if (r.selected & abi.kernel_scheduler_check_case_fpu != 0) 6 else 0);
     if (r.work_submitted != expected_work) return false;
     return true;
 }
