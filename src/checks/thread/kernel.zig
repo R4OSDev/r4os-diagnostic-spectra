@@ -63,8 +63,8 @@ const Admission = @import("../admission.zig").Probe(Report, admissionInvoke, pas
 
 pub fn run(app: *r4os.App, args: []const u8, out: *Output) i32 {
     const all = abi.kernel_scheduler_check_case_all;
-    const selected: u32 = if (cli.same(args, "/KERNEL")) all else if (cli.same(args, "/KERNEL:SYNC") or cli.same(args, "/KERNEL:ADMISSION")) abi.kernel_scheduler_check_case_sync | (if (cli.same(args, "/KERNEL:SYNC")) abi.kernel_scheduler_check_case_unwind else @as(u32, 0)) else if (cli.same(args, "/KERNEL:SCHED")) abi.kernel_scheduler_check_case_directed | abi.kernel_scheduler_check_case_fairness | abi.kernel_scheduler_check_case_inheritance | abi.kernel_scheduler_check_case_deadlines else if (cli.same(args, "/KERNEL:FPU")) abi.kernel_scheduler_check_case_fpu else {
-        out.unavailable("thread", "use /KERNEL[:SYNC|SCHED|FPU|ADMISSION] without other check options");
+    const selected: u32 = if (cli.same(args, "/KERNEL")) all else if (cli.same(args, "/KERNEL:SYNC") or cli.same(args, "/KERNEL:ADMISSION")) abi.kernel_scheduler_check_case_sync | (if (cli.same(args, "/KERNEL:SYNC")) abi.kernel_scheduler_check_case_unwind else @as(u32, 0)) else if (cli.same(args, "/KERNEL:SCHED")) abi.kernel_scheduler_check_case_directed | abi.kernel_scheduler_check_case_fairness | abi.kernel_scheduler_check_case_inheritance | abi.kernel_scheduler_check_case_deadlines else if (cli.same(args, "/KERNEL:FPU")) abi.kernel_scheduler_check_case_fpu else if (cli.same(args, "/KERNEL:WORKERS")) abi.kernel_scheduler_check_case_workers else {
+        out.unavailable("thread", "use /KERNEL[:SYNC|SCHED|FPU|ADMISSION|WORKERS] without other check options");
         return 2;
     };
     const dev = app.devicesLowLevel() orelse {

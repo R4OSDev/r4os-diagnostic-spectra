@@ -44,7 +44,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "  CHECK SUBSYSTEM [/HOST] [/SNES] (isolated Test fixtures; /SNES selects only that original pair)\r\n" ++
             "  CHECK DESKTOP /CANCEL (own real check child; expects Exit4, reap and empty resources)\r\n" ++
             "  CHECK REMOTEFRAME [/EXITOWNED] (immutable snapshots; real child exit/reap/owner cleanup)\r\n" ++
-            "  CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION] (bounded native checks)\r\n" ++
+            "  CHECK THREAD /KERNEL[:SYNC|SCHED|FPU|ADMISSION|WORKERS] (bounded native checks)\r\n" ++
             "  CHECK VM /INVENTORY (untouched task/thread output pages, real demand faults)\r\n" ++
             "  CHECK LIFECYCLE /METADATA (bounded full/lifecycle comparison and exact ownership)\r\n" ++
             "  CHECK THREAD /RTC (isolated guest; changes/restores calendar; requires 4 CPUs)\r\n" ++
