@@ -38,6 +38,7 @@ SPECTRA CHECK REMOTEFRAME /EXITOWNED /JSON
 SPECTRA CHECK THREAD
 SPECTRA CHECK THREAD /KERNEL
 SPECTRA CHECK THREAD /KERNEL:SYNC
+SPECTRA CHECK THREAD /KERNEL:IDLE
 SPECTRA CHECK THREAD /PROCESSEXIT
 SPECTRA CHECK PERFORMANCE
 SPECTRA BENCH CLOCK /REPEAT:3 /WARM
@@ -229,3 +230,10 @@ rows are never complete results. The existing ID-reuse case retains its original
 Identity-only stale-ID children use the existing explicit `terminal_mode`
 console host. An inherited host deliberately retains child producer blocks in
 its visible transcript after Reap; that retained output is not a process leak.
+
+`/KERNEL:IDLE` explicitly measures actual timer-vector entries on stable idle APs
+(including stale vectors), then checks timer restoration and sixteen timed wakes
+with one owned AP worker and exact retirement. It keeps every online CPU
+schedulable. It is separate from the unchanged default `/KERNEL` (127) and
+`/KERNEL:WORKERS` (128); combining these profiles is rejected. No idle sampler
+or observation receipt writes run outside this requested check.

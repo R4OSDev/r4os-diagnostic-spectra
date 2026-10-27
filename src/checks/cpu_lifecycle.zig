@@ -284,7 +284,7 @@ pub fn run(app: *r4os.App, out: *Output) i32 {
         n.failed == 0 and n.cleanup_errors == 0 and n.tasks_created == n.tasks_reaped and n.tasks_created == 5 and n.if_checks == 3 and
         n.new_epoch == n.old_epoch + 1 and n.parked_epoch == n.old_epoch and n.stopped_epoch == n.old_epoch and n.available_offline + 1 == n.available_before and n.available_after == n.available_before;
     if (!native_ok) { out.message("smp", "SPECTRA CPU lifecycle native: FAILED", false); return 1; }
-    const ok = bspComputeContext() and consumers(&dev, 1, out);
+    const ok = bspComputeContext() and consumers(&dev, n.cpu_index, out);
     out.message("smp", if (ok) "SPECTRA CPU lifecycle: ok (native Busy/IF/TLB, real module YMM/wait migration, I/O and fresh epochs)" else "SPECTRA CPU lifecycle: FAILED", false);
     return if (ok) 0 else 1;
 }

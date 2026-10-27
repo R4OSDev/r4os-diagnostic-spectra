@@ -10,14 +10,17 @@ const sentinel: u64 = 0x5a5a_a5a5_5a5a_a5a5;
 const Guarded = extern struct { value: Report = .{}, tail: [2]u64 = .{ sentinel, sentinel } };
 
 fn headerContract(dev: *const r4os.r4dev.Context) bool {
-    for (0..4) |index| {
+    for (0..7) |index| {
         var invalid: Report = .{};
         var selected: u32 = abi.kernel_scheduler_check_case_all;
         switch (index) {
             0 => invalid.version = 0,
             1 => invalid.size -= 1,
             2 => selected = 0,
-            else => selected = 0x8000_0000,
+            3 => selected = 0x8000_0000,
+            4 => selected = abi.kernel_scheduler_check_case_workers | abi.kernel_scheduler_check_case_idle,
+            5 => selected = abi.kernel_scheduler_check_case_idle | abi.kernel_scheduler_check_case_all,
+            else => selected = abi.kernel_scheduler_check_case_workers | abi.kernel_scheduler_check_case_all,
         }
         invalid.run_id = sentinel;
         const before = invalid;
@@ -63,8 +66,8 @@ const Admission = @import("../admission.zig").Probe(Report, admissionInvoke, pas
 
 pub fn run(app: *r4os.App, args: []const u8, out: *Output) i32 {
     const all = abi.kernel_scheduler_check_case_all;
-    const selected: u32 = if (cli.same(args, "/KERNEL")) all else if (cli.same(args, "/KERNEL:SYNC") or cli.same(args, "/KERNEL:ADMISSION")) abi.kernel_scheduler_check_case_sync | (if (cli.same(args, "/KERNEL:SYNC")) abi.kernel_scheduler_check_case_unwind else @as(u32, 0)) else if (cli.same(args, "/KERNEL:SCHED")) abi.kernel_scheduler_check_case_directed | abi.kernel_scheduler_check_case_fairness | abi.kernel_scheduler_check_case_inheritance | abi.kernel_scheduler_check_case_deadlines else if (cli.same(args, "/KERNEL:FPU")) abi.kernel_scheduler_check_case_fpu else if (cli.same(args, "/KERNEL:WORKERS")) abi.kernel_scheduler_check_case_workers else {
-        out.unavailable("thread", "use /KERNEL[:SYNC|SCHED|FPU|ADMISSION|WORKERS] without other check options");
+    const selected: u32 = if (cli.same(args, "/KERNEL")) all else if (cli.same(args, "/KERNEL:SYNC") or cli.same(args, "/KERNEL:ADMISSION")) abi.kernel_scheduler_check_case_sync | (if (cli.same(args, "/KERNEL:SYNC")) abi.kernel_scheduler_check_case_unwind else @as(u32, 0)) else if (cli.same(args, "/KERNEL:SCHED")) abi.kernel_scheduler_check_case_directed | abi.kernel_scheduler_check_case_fairness | abi.kernel_scheduler_check_case_inheritance | abi.kernel_scheduler_check_case_deadlines else if (cli.same(args, "/KERNEL:FPU")) abi.kernel_scheduler_check_case_fpu else if (cli.same(args, "/KERNEL:WORKERS")) abi.kernel_scheduler_check_case_workers else if (cli.same(args, "/KERNEL:IDLE")) abi.kernel_scheduler_check_case_idle else {
+        out.unavailable("thread", "use /KERNEL[:SYNC|SCHED|FPU|ADMISSION|WORKERS|IDLE] without other check options");
         return 2;
     };
     const dev = app.devicesLowLevel() orelse {
