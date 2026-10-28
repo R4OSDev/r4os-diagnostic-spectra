@@ -49,6 +49,7 @@ pub const Controller = struct {
     window_completion_handles: [2]r.abi.ProgramProcessHandle = .{r.abi.ProgramProcessHandle{}} ** 2,
     window_completion_exit_codes: [2]i32 = .{0} ** 2,
     failed: bool = false,
+    failure_owner_attempted: bool = false,
     render_stats: struct { redraws: u64 = 0, present_lost_frames: u64 = 0, present_failures: u64 = 0 } = .{},
 
     pub const startHeadlessSubsystemAcceptance = scenes.startHeadlessSubsystemAcceptance;

@@ -366,3 +366,27 @@ ReferenzGET normalisiert gleich; OriginalSHA256 d538b089c24b973ba14209cdad415fed
 Gesamt135.521406/IPC141.872165 gegen59 137.870960/146.849660 unisoliert;
 keinSpeedup-/Noise-/Regressionsursachenbeweis und keinScore-/Uploadrerun.
 Alle Originale/Kontexte/SHA256 unter ExFiles/Reports/Benchmarks/87c87a4d-427c-4a9f-8c22-ac49e189dd03/.
+
+0.87.62 / Spectra0.1.92: einmaliger Subsystem-Fehlerbesitzerbericht
+----------------------------------------------------------------
+Ein fehlgeschlagener DESKTOP- oder SUBSYSTEM-Fall schreibt zuerst seinen
+urspruenglichen Fehler. Solange dessen genaue Desktop-/Caller-Session lebt
+und die bestehende Arbeitsdeadline offen ist, fordert er einmal vor dem
+Aufraeumen den vorhandenen CaptureStats-Besitzerbericht an. Keine neue
+Szene, Wiederholung der fehlgeschlagenen Aktion, laengere Frist, Probe-
+Schleife oder Normalbetriebssampling. Der fehlgeschlagene Test bleibt rot;
+auch ein gescheiterter Berichtsaustausch wird getrennt protokolliert.
+Die drei vorhandenen eigenen Berichtsdateien/Identitaetspruefungen und deren
+exakte Cleanupquittungen bleiben beim bisherigen Desktop-Checkbesitzer.
+Anlass: originaler62KVM2-Fokus38 raw0/header-8; Broker-Ticket12 war bis zur
+2s-Expiry unclaimed/delivered0. Davor62KVM1 GB-B2 audio_busy1statt0. Beide
+Originale, Artefakte, Fristen und roten Ergebnisse bleiben fuer66 erhalten;
+die Diagnoseaenderung beansprucht keine Fehlerbehebung. Abnahme siehe Abschluss.
+
+0.87.62 Abschluss: Desktop180/Spectra92 lokale Owner23/3/1, KVM4Q5 mit
+originalen langen60s-Vertraegen, native16/2BOreturns/3Exit0reaps/keine
+nativeFailures und normaler PostGPU-Ressourcenabbau bestanden. Historische
+rote Originale bleiben in66; physische Sicht/Hoeren/Latenz SKIP.
+Genau1finalSTANDARD62 e9f64dc9-ec35-4765-9cd1-c7220270545a/30/4/metric2/6valid:
+lokal und R4OS Server vollstaendig validiert; OriginalSHA256 a87bc2f70d68f2111b589f93f15f6e0b6d026372e1e84407cd9497bac8e78c23.
+Vollstaendige Belege: Docs/Core/Parallelitaet.txt/0.87.62 und Laufarchiv.

@@ -772,6 +772,19 @@ pub fn launchHeadlessR4SnesGuest(self: *Controller, guest_path: []const u8, trac
 
 pub fn headlessSubsystemFailure(self: *Controller, comptime reason: []const u8) bool {
     self.check.out.record("failure", "SUBSYSTEM", 0, .{ .stage = reason });
+    // The original failure is already recorded. Inspect this exact live host
+    // once before cleanup, without replaying an action or extending its work
+    // deadline. The existing copied report owns its normal exact-file cleanup.
+    if (!self.failure_owner_attempted) {
+        self.failure_owner_attempted = true;
+        if (self.check.session and self.check.desktop.valid() and
+            !self.ctx.sys.programShouldClose() and self.ctx.ticks() < self.check.deadline)
+        {
+            @import("desktop_replay_check.zig").reportOwner(self.app, &self.check, 0) catch |err| {
+                self.check.out.unavailable("SUBSYSTEM-OWNER", @errorName(err));
+            };
+        }
+    }
     if (self.ctx.exists(subsystem_host_test_marker_path)) return false;
     const marker = "SUBSYSTEM runtime bootstrap FAILED: " ++ reason ++ "\r\n";
     _ = self.ctx.fileWrite(subsystem_host_test_marker_path, marker);

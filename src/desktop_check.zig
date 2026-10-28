@@ -443,6 +443,19 @@ pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
         const cancelled = check.cancelled or check.sys.programShouldClose();
         result = if (cancelled) 4 else 1;
         out.unavailable("DESKTOP", if (cancelled) "Cancelled" else @errorName(err));
+        // Preserve this failed attempt before asking for one copied live-owner
+        // report. No scene action is replayed and the original deadline stays.
+        if (!cancelled and check.session and check.desktop.valid() and
+            check.sys.ticks() < check.deadline)
+        {
+            for (check.replay_reports, 0..) |owned, sequence| {
+                if (owned) continue;
+                @import("desktop_replay_check.zig").reportOwner(app, &check, sequence) catch |failure| {
+                    out.unavailable("DESKTOP-OWNER", @errorName(failure));
+                };
+                break;
+            }
+        }
     };
     var cleaned = check.cleanup();
     if (!cleaned) result = 1;
