@@ -13,6 +13,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     const launcher = @import("standard_launch.zig");
     const raw = app.args();
     if (std.mem.eql(u8, raw, @import("remote_frame_check.zig").child_argument)) return @import("remote_frame_check.zig").child(app);
+    if (std.mem.startsWith(u8, raw, @import("desktop_replay_check.zig").child_argument)) return @import("desktop_replay_check.zig").child(app);
     const worker = std.mem.startsWith(u8, raw, launcher.prefix);
     var worker_command: [1024]u8 = undefined;
     request = (if (worker) launcher.workerRequest(app, raw, &worker_command) else cli.parse(raw)) catch |err| {
@@ -40,7 +41,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "  CHECK BOOT|PERFORMANCE|WORK|THREAD|SMP|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP|USB [options]\r\n" ++
             "  CHECK SMP [/ADMISSION|/LIFECYCLE|/POWER|/FEATURES|/FEATURES-OFFLINE:n|/MCA|/MICROCODE|/PMU|/ACCEL|/ENTROPY|/ENTROPY-NONE]\r\n" ++
             "  CHECK TEXT /CODECS (strict imported legacy/UTF-8 and exact document bytes)\r\n" ++
-            "  CHECK DESKTOP [/HOST] [/RESTART] [/AUDIO] [/CAPTURE] (/HOST owns a standalone isolated Desktop)\r\n" ++
+            "  CHECK DESKTOP [/HOST] [/RESTART] [/AUDIO] [/CAPTURE] [/REPLAY] (/REPLAY requires a native GR owner)\r\n" ++
             "  CHECK SUBSYSTEM [/HOST] [/SNES] (isolated Test fixtures; /SNES selects only that original pair)\r\n" ++
             "  CHECK DESKTOP /CANCEL (own real check child; expects Exit4, reap and empty resources)\r\n" ++
             "  CHECK REMOTEFRAME [/EXITOWNED] (immutable snapshots; real child exit/reap/owner cleanup)\r\n" ++

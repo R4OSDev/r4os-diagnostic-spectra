@@ -1,4 +1,4 @@
-Spectra - Diagnosewerkzeug 0.1.79
+Spectra - Diagnosewerkzeug 0.1.86
 =============================
 
 Aufrufe
@@ -227,3 +227,43 @@ R4DEV/R4DRAW/R4DESK liefern gecachte Ausgaben und Capturezaehler. Keine
 Render-/Capturearbeit oder Instrumentierung, unbekannte Detailzeiten null.
 Aktueller Bytevertrag/Scope sowie CHECK-/BENCH-Migrationsplan75--77 stehen
 in Docs/Diagnostics/Spectra.txt. Host-/Protokollfaelle: Build.sh desktop-test.
+
+0.87.59 / Spectra0.1.86: CHECK DESKTOP /REPLAY
+-------------------------------------------
+Erhaelt alle APPDEF/CLOCK-Geometrie-/Revision-/2100ms-/Close-/Reapfaelle.
+Danach wird innerhalb derselben60s-Frist eine neue exklusive Session fuer den
+echten nativen WINIMAGE-Produzenten geoeffnet. Drei CaptureStats23-Abfragen
+belegen dessen Ausgangszustand, echte Bildarbeit und ruhigen Endzustand.
+Nur ein aktiver nativer GR-Owner mit
+identischem Device-/Resetbesitz, wachsendem CPU-Reuse und echten Bildleih-/
+Rueckgabequittungen besteht. CPU-Ausgabe und worker-owned/unbekannte Werte
+ersetzen keine native Abnahme. Unveraenderte3sRPC-/60sGesamtfristen; volle
+Originalberichte gehen in JSON/EXPORT und die eigenen drei Reportdateien
+werden quittiert entfernt. Keine normale Detailinstrumentierung/Frameerzwingung.
+
+Ergaenzung59: APPDEF/CLOCK erzeugen klassische Flaechen und keine nativen BOs.
+Die originale2100ms-Pruefung bleibt; danach eigener WINIMAGE-Produzent mit
+zwei echten Device-local-BOs/GPU-Fences/Take/Return/Wiederverwendung/Close.
+Gleiche60sGesamtfrist/3sRPC, exklusiver neuer Sessionbesitz nach Reap der
+Originale. Erste native83-Pruefung NativeImageReadMissing bleibt als FAIL
+erhalten; CPU-Reuse9->36/Frames3->7 ist trotzdem separat belegt. Alle
+bisherigen nativen Fehlversuche bleiben getrennte Originalbelege; die native
+Fall10 mit86 ohne Beobachtungsfixture besteht denselben Vertrag: identischer
+aktiver NativeGR/Device/Target, CPU-Reuse125->161, sichtbareFrames19->25, zwei
+weitere echte Bildleihen/Rueckgaben(2->4), Rest0 und drei exakteExit0-Reaps.
+Die neue passive30s-Taskdiagnose inFall9 bestand ebenfalls, erfasste aber
+keinen fehlgeschlagenen Bind und erklaert Fall8 nicht.
+
+86 korrigiert den Belegkanal: GUI-Prozesse besitzen hier kein abrufbares
+ConsoleTranscript; CompletionRead=-12 ist output_unavailable. Der Parent
+beansprucht stattdessen einen fehlenden TEMP-Pfad mit eigener Generation und
+Nonce vor Spawn. Das Kind schreibt seinen exakten ID-/Generationsheader und
+die letzte Phase/den terminalen Ressourcenbeleg. Der Parent akzeptiert nur
+diesen Header plus Originalerfolg, Exit0 und exaktes Reap. Der eigene Pfad
+wird erst nach Reap entfernt; unklare/laufende Kinder behalten ihn.
+Native Buffer-Start/Wait/Receive/Describe und der terminale Bufferstatus
+verwenden Erfolg1; Queue-/Service-/Processergebnisse behalten ihre eigenen
+Konventionen. Keine Frist, Fence-, Take-/Return- oder Closepruefung gelockert.
+Datei-I/O ist Teil dieser ausdruecklichen Probe, kein normaler Sampler.
+Zwei Hostfaelle pruefen Nonce-/Generationsisolation und fremde/fehlende
+terminale Quittungen ueber das bestehende window-images-fixture-Ziel.

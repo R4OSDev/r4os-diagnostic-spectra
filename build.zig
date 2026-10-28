@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
     const desktop_wire_path: std.Build.LazyPath = .{ .cwd_relative = b.pathResolve(&.{"../../Services/WindowService/Contract/desktop_diagnostics_v1.zig"}) };
     const launch_wire_path: std.Build.LazyPath = .{ .cwd_relative = b.pathResolve(&.{"../../Services/WindowService/Contract/desktop_launch_v1.zig"}) };
     const active_wire_path: std.Build.LazyPath = .{ .cwd_relative = b.pathResolve(&.{"../../Apps/Desktop/Contract/desktop_check_v2.zig"}) };
+    const image_case_path: std.Build.LazyPath = .{ .cwd_relative = b.pathResolve(&.{"../../Apps/Desktop/Tests/WindowImages/main.zig"}) };
     const active_wire = b.createModule(.{ .root_source_file = active_wire_path, .target = b.graph.host });
     const desktop_wire = b.createModule(.{ .root_source_file = desktop_wire_path, .target = b.graph.host });
     const host_tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -28,7 +29,7 @@ pub fn build(b: *std.Build) void {
     const libraries_dep = b.dependencyFromBuildZig(libraries_build, .{});
     const sdk = sdk_build.sdk(b, sdk_dep, .{});
     _ = sdk.addR4MFWithOptions(b.path("module.R4MF"), .{
-        .zig_module_roots = &.{ libraries_dep.namedLazyPath("r4std_zig_binding"), b.path("Version.zig"), desktop_wire_path, active_wire_path, launch_wire_path },
+        .zig_module_roots = &.{ libraries_dep.namedLazyPath("r4std_zig_binding"), b.path("Version.zig"), desktop_wire_path, active_wire_path, launch_wire_path, image_case_path },
     });
     _ = sdk.addR4MFWithOptions(b.path("Fixtures/StandardChild/module.R4MF"), .{});
     @import("Fixtures/Loader/build.zig").add(b, sdk_build.build_api, sdk.builder, sdk_dep);

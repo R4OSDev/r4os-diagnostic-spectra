@@ -1,7 +1,7 @@
 R4OS_MODULE_MANIFEST=2
 KIND=R4X
 NAME=SPECTRA
-VERSION=0.1.82
+VERSION=0.1.86
 LANGUAGE=Zig
 SOURCE=src/main.zig
 ENTRY_MODE=app
@@ -31,3 +31,4 @@ META=memory.tag=spectra
 META=runtime.workers=owned-v1
 ZIG_MODULE=desktop_check:../../Apps/Desktop/Contract/desktop_check_v2.zig
 ZIG_MODULE=desktop_launch:../../Services/WindowService/Contract/desktop_launch_v1.zig
+ZIG_MODULE=desktop_image_case:../../Apps/Desktop/Tests/WindowImages/main.zig

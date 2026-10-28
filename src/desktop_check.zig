@@ -30,6 +30,9 @@ pub const Check = struct {
     capture_override: bool = false,
     capture_leases: [4]a.RemoteFrameLease = .{a.RemoteFrameLease{}} ** 4,
     screenshot_intent: bool = false,
+    replay_reports: [3]bool = .{false} ** 3,
+    native_report: [128:0]u8 = .{0} ** 128,
+    native_report_owned: bool = false,
 
     pub fn checkDeadline(self: *Check) !void {
         if (self.sys.programShouldClose()) {
@@ -63,6 +66,9 @@ pub const Check = struct {
         var header: a.ServiceMessageHeader = .{};
         const got = self.sys.serviceCall(self.connection, wire.operation, &bytes, &header, &response, self.sys.ticksFromMilliseconds(3000));
         if (!self.closeConnection()) return error.ConnectionCloseUnacknowledged;
+        if (got < 0 or header.status != 0 or got != response.len) {
+            self.out.record("desktop-rpc-failure", self.resource_group, 0, .{ .operation = op, .target = target, .returned = got, .header_status = header.status, .expected_bytes = response.len, .rpc_budget_ms = @as(u32, 3000) });
+        }
         if (got == a.service_api_result_timeout or header.status == a.service_api_result_timeout) return error.DesktopTimeout;
         if (got == a.service_api_result_busy or header.status == a.service_api_result_busy) return error.DesktopBrokerBusy;
         if (got == a.service_api_result_not_running or header.status == a.service_api_result_not_running) return error.DesktopUnavailable;
@@ -181,6 +187,18 @@ pub const Check = struct {
         if (waited != 0 or !id(done.handle).same(id(handle.*)) or done.sequence == 0) return false;
         const sequence = done.sequence;
         const exit_code = done.exit_code;
+        if (exit_code != 0) {
+            // Capture the exact completed child's failure before Reap removes
+            // its console, including failures before the normal wait/read.
+            var bytes: [4096]u8 = undefined;
+            var count: u32 = 0;
+            const read_status = self.sys.programCompletionRead(handle, 0, &bytes, &count);
+            if (read_status == 0 and count <= bytes.len) {
+                self.out.message("desktop-child-failure", bytes[0..count], false);
+            } else {
+                self.out.record("desktop-child-output-unavailable", self.resource_group, index, .{ .handle = handle.*, .sequence = sequence, .exit_code = exit_code, .read_status = read_status, .reported_bytes = count });
+            }
+        }
         const reap_start = self.sys.ticks();
         while (true) {
             const status = self.sys.programHandleReap(handle, &done);
@@ -201,6 +219,17 @@ pub const Check = struct {
             ok = false;
         };
         if (!self.releaseScreenshot()) ok = false;
+        for (&self.replay_reports, 0..) |*owned, sequence| {
+            if (!owned.*) continue;
+            var buffer: [128:0]u8 = undefined;
+            const path = wire.captureReportPath(&buffer, id(self.caller), sequence) catch {
+                ok = false;
+                continue;
+            };
+            if (self.sys.exists(path) and self.sys.fileDelete(path) < 0) {
+                ok = false;
+            } else owned.* = false;
+        }
         if (self.tray_owned) {
             if (self.tray(a.tray_service_op_remove)) |_| self.tray_owned = false else |_| {
                 ok = false;
@@ -209,6 +238,13 @@ pub const Check = struct {
         for (0..2) |index| if (!self.closeChild(index, true)) {
             ok = false;
         };
+        if (self.native_report_owned) {
+            if (self.handles[0].instance_id != 0 or self.handles[1].instance_id != 0) {
+                ok = false; // A live/unreaped producer may still write its file.
+            } else if (self.sys.exists(&self.native_report) and self.sys.fileDelete(&self.native_report) < 0) {
+                ok = false;
+            } else self.native_report_owned = false;
+        }
         if (self.session) {
             const start = self.sys.ticks();
             while (self.session) {
@@ -257,7 +293,7 @@ pub const Check = struct {
         self.screenshot_intent = false;
         return true;
     }
-    fn work(self: *Check, app: *r.App, restart: bool, audio: bool, capture: bool, launch: bool) !void {
+    fn work(self: *Check, app: *r.App, restart: bool, audio: bool, capture: bool, launch: bool, replay: bool) !void {
         for (paths) |path| if (!self.sys.exists(path)) return error.RequiredFullFixtureMissing;
         const begin = try self.beginSession(.begin);
         if ((restart or audio or capture) and begin.flags & wire.isolated == 0) return error.RequiresIsolatedDesktopBoot;
@@ -342,6 +378,7 @@ pub const Check = struct {
             _ = try self.call(.close, id(self.handles[index]), 0, 0);
             if (!self.closeChild(index, false)) return error.FixtureClose;
         }
+        if (replay) try @import("desktop_replay_check.zig").run(app, self);
         if (capture) try @import("desktop_capture_check.zig").run(self, app);
         // Normal public capture, immutable readers and Exit-owned are one
         // shared public snapshot oracle, not copied private Desktop test bodies.
@@ -361,9 +398,10 @@ pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
     var capture = false;
     var own_host = false;
     var launch = false;
+    var replay = false;
     var tokens: cli.Tokens = .{ .input = args };
     while (tokens.next() catch return 2) |token| {
-        if (cli.same(token, "/RESTART") and !restart) restart = true else if (cli.same(token, "/AUDIO") and !audio) audio = true else if (cli.same(token, "/CAPTURE") and !capture) capture = true else if (cli.same(token, "/HOST") and !own_host) own_host = true else if (cli.same(token, "/LAUNCH") and !launch) launch = true else return 2;
+        if (cli.same(token, "/RESTART") and !restart) restart = true else if (cli.same(token, "/AUDIO") and !audio) audio = true else if (cli.same(token, "/CAPTURE") and !capture) capture = true else if (cli.same(token, "/HOST") and !own_host) own_host = true else if (cli.same(token, "/LAUNCH") and !launch) launch = true else if (cli.same(token, "/REPLAY") and !replay) replay = true else return 2;
     }
     if (launch and !own_host) return 2;
     @import("check_context.zig").emit(app, out, "DESKTOP");
@@ -382,7 +420,7 @@ pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
         return 1;
     }
     var result: i32 = 0;
-    check.work(app, restart, audio, capture, launch) catch |err| {
+    check.work(app, restart, audio, capture, launch, replay) catch |err| {
         const cancelled = check.cancelled or check.sys.programShouldClose();
         result = if (cancelled) 4 else 1;
         out.unavailable("DESKTOP", if (cancelled) "Cancelled" else @errorName(err));

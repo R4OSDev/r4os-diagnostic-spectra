@@ -8,7 +8,7 @@ const Output = @import("output.zig").Output;
 const Options = @import("desktop_bench_options.zig").Options;
 const snes_path = "C:\\R4OS\\SUBSYSTEMS\\r4os.snes\\R4SNES.R4X";
 
-fn readFile(app: *r.App, path: [*:0]const u8) ![]u8 {
+pub fn readFile(app: *r.App, path: [*:0]const u8) ![]u8 {
     const sys = app.system();
     const info = sys.fileInfo(path) orelse return error.OwnerFileMissing;
     if (info.size == 0 or info.size > 2 * 1024 * 1024) return error.OwnerFileSize;
