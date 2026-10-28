@@ -188,6 +188,17 @@ pub const Check = struct {
         const sequence = done.sequence;
         const exit_code = done.exit_code;
         if (exit_code != 0) {
+            // The pre-cleanup snapshot may race a still-running producer.
+            // Wait has now proved its exact terminal completion; retain the
+            // final private status before Reap and owned-file deletion.
+            if (index == 0 and self.native_report_owned) {
+                var status_bytes: [512]u8 = undefined;
+                const got = self.sys.fileRead(&self.native_report, &status_bytes);
+                const status = @import("desktop_image_case").NativeStatus;
+                if (got > 0 and got <= status_bytes.len and status.owns(status_bytes[0..@intCast(got)], .{ .instance = done.handle.instance_id, .generation = done.handle.generation })) {
+                    self.out.message("native-image-child-terminal", status_bytes[0..@intCast(got)], false);
+                } else self.out.record("native-image-child-terminal-unavailable", self.resource_group, index, .{ .handle = done.handle, .sequence = sequence, .read_status = got });
+            }
             // Capture the exact completed child's failure before Reap removes
             // its console, including failures before the normal wait/read.
             var bytes: [4096]u8 = undefined;
@@ -399,11 +410,13 @@ pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
     var own_host = false;
     var launch = false;
     var replay = false;
+    var owner_only = false;
     var tokens: cli.Tokens = .{ .input = args };
     while (tokens.next() catch return 2) |token| {
-        if (cli.same(token, "/RESTART") and !restart) restart = true else if (cli.same(token, "/AUDIO") and !audio) audio = true else if (cli.same(token, "/CAPTURE") and !capture) capture = true else if (cli.same(token, "/HOST") and !own_host) own_host = true else if (cli.same(token, "/LAUNCH") and !launch) launch = true else if (cli.same(token, "/REPLAY") and !replay) replay = true else return 2;
+        if (cli.same(token, "/RESTART") and !restart) restart = true else if (cli.same(token, "/AUDIO") and !audio) audio = true else if (cli.same(token, "/CAPTURE") and !capture) capture = true else if (cli.same(token, "/HOST") and !own_host) own_host = true else if (cli.same(token, "/LAUNCH") and !launch) launch = true else if (cli.same(token, "/REPLAY") and !replay) replay = true else if (cli.same(token, "/OWNER") and !owner_only) owner_only = true else return 2;
     }
     if (launch and !own_host) return 2;
+    if (owner_only and (restart or audio or capture or own_host or launch or replay)) return 2;
     @import("check_context.zig").emit(app, out, "DESKTOP");
     var check: Check = .{ .sys = app.system(), .out = out, .desk = app.desktop() };
     var host: @import("desktop_host_check.zig").Owner = .{};
@@ -420,14 +433,20 @@ pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
         return 1;
     }
     var result: i32 = 0;
-    check.work(app, restart, audio, capture, launch, replay) catch |err| {
+    const work = if (owner_only) blk: {
+        // One explicit copied owner report. Never reopen the Desktop or
+        // replay scene actions merely to inspect a previous failure.
+        _ = check.beginSession(.begin) catch |err| break :blk @as(anyerror!void, err);
+        break :blk @as(anyerror!void, @import("desktop_replay_check.zig").reportOwner(app, &check, 0));
+    } else check.work(app, restart, audio, capture, launch, replay);
+    work catch |err| {
         const cancelled = check.cancelled or check.sys.programShouldClose();
         result = if (cancelled) 4 else 1;
         out.unavailable("DESKTOP", if (cancelled) "Cancelled" else @errorName(err));
     };
     var cleaned = check.cleanup();
     if (!cleaned) result = 1;
-    if (result == 0) {
+    if (result == 0 and !owner_only) {
         const capture_result = @import("remote_frame_check.zig").run(app, "", out);
         if (capture_result != 0) result = capture_result;
     }

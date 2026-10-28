@@ -28,7 +28,7 @@ fn boot(app: *r4os.App, out: *Output) i32 {
     return 1;
 }
 
-fn service(app: *r4os.App, out: *Output) i32 {
+fn service(app: *r4os.App, out: *Output, source: u32, group: []const u8) i32 {
     const sys = app.system();
     const allocator = app.lowLevel().allocator();
     for (0..3) |_| {
@@ -38,7 +38,7 @@ fn service(app: *r4os.App, out: *Output) i32 {
         const records = allocator.alloc(abi.LogServiceRecord, status.record_capacity) catch break;
         defer allocator.free(records);
         var count: usize = 0;
-        var query = abi.LogServiceRecordQuery{ .source_id = abi.log_service_source_bootlog };
+        var query = abi.LogServiceRecordQuery{ .source_id = source };
         var complete = false;
         var revision: ?u32 = null;
         while (count <= records.len) {
@@ -53,22 +53,23 @@ fn service(app: *r4os.App, out: *Output) i32 {
             query.start_index = page.next_index;
         }
         if (!complete) continue;
-        out.record("source", "logsvc_kernel", 0, status);
-        out.record("quality", "logsvc_kernel", 0, .{
+        out.record("source", group, 0, status);
+        out.record("quality", group, 0, .{
             .revision = revision, .count = count, .complete = true,
-            .time_basis = @as([]const u8, "event ticks when LOGSVC collected legacy kernel text; not original event time"),
-            .severity = @as([]const u8, "LOGSVC classification of legacy text"),
+            .time_basis = @as([]const u8, if (source == abi.log_service_source_bootlog) "event ticks when LOGSVC collected legacy kernel text; not original event time" else "producer record event ticks; no physical or isolated duration receipt"),
+            .severity = @as([]const u8, if (source == abi.log_service_source_bootlog) "LOGSVC classification of legacy text" else "explicit producer severity"),
         });
-        for (records[0..count]) |record| out.record("log", "logsvc_kernel", record.sequence, record);
+        for (records[0..count]) |record| out.record("log", group, record.sequence, record);
         return 0;
     }
-    out.unavailable("logsvc_kernel", "LOGSVC absent or no complete stable page set after three attempts");
+    out.unavailable(group, "LOGSVC absent or no complete stable page set after three attempts");
     return 1;
 }
 
 pub fn run(app: *r4os.App, group: []const u8, out: *Output) i32 {
     if (cli.same(group, "BOOT")) return boot(app, out);
-    if (cli.same(group, "SERVICE")) return service(app, out);
-    out.unavailable("logs", "unknown source; use BOOT or SERVICE");
+    if (cli.same(group, "SERVICE")) return service(app, out, abi.log_service_source_bootlog, "logsvc_kernel");
+    if (cli.same(group, "APPLICATION")) return service(app, out, abi.log_service_source_application, "logsvc_application");
+    out.unavailable("logs", "unknown source; use BOOT, SERVICE or APPLICATION");
     return 2;
 }

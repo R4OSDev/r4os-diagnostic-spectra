@@ -267,3 +267,102 @@ Konventionen. Keine Frist, Fence-, Take-/Return- oder Closepruefung gelockert.
 Datei-I/O ist Teil dieser ausdruecklichen Probe, kein normaler Sampler.
 Zwei Hostfaelle pruefen Nonce-/Generationsisolation und fremde/fehlende
 terminale Quittungen ueber das bestehende window-images-fixture-Ziel.
+
+0.87.60 / Spectra0.1.87: tatsaechliche Atlasinhalt-Wiederverwendung
+----------------------------------------------------------------
+CHECK DESKTOP /REPLAY behaelt die originaleZwei-Fensterarbeit, dreiSnapshots,
+3sRPC/60sGesamt und echten nativenZwei-Bild-/Fence-/TakeReturn-/Reapvertrag.
+CaptureStats muss zusaetzlich steigende asset_misses und atlas_reused_layers
+liefern. Der zweite Zaehler entsteht erst nach erfolgreichem GPUabschluss
+fuer einen unveraenderten Layer trotz neuer Inhalte auf seiner Atlasseite.
+Die vorhandenen Target- und Deviceidentitaeten bleiben zwischen den Samples
+gleich; worker-owned/unbekannt ist kein0beleg. WINIMAGE104 publiziert nur im
+nativen Zweig eine echte neue childfarbeneGlyphe und laesst250ms Exposition
+innerhalb der urspruenglichen15s; der CPU-Fixturepfad bleibt unveraendert.
+Counter sind Owner-Laufzeitwerte einschliesslich Hintergrundarbeit, keine
+isolierte Fensterlaufzeit oder physischeSicht-/Latenzmessung. Aktuelle echte
+Hardwareabnahme noch offen; lokalerBuild/desktop-test und Win104Host/Build0.
+
+0.87.60 / Spectra88: Fehlerquellen und terminale Kindquittung
+----------------------------------------------------------
+SPECTRA LOGS APPLICATION [/JSON] [/EXPORT:pfad] liest ausdruecklich die
+Applicationrecords des vorhandenen LOGSVC. Die Gruppe logsvc_application
+behaelt originale Producer-Schwere/Eventticks. LOGS SERVICE behaelt die
+bisherige Kernel-Bootlogquelle/Einsammelzeit. Auch die Hilfe nennt APPLICATION.
+WINSVC23 zeigt eigene Fehlerwerte dagegen ueber SERVMAN STATUS WINSVC; dafuer
+finden keine synchronen Logserviceaufrufe im WINSVC-Arbeitskanal statt.
+
+Ein vorzeitig fehlgeschlagener Desktopcheck kann die Statusdatei noch lesen,
+waehrend sein GUI-Kind weiterlaeuft. closeChild liest jetzt bei echtem
+Nichtnull-Exit nach dem exakten Wait und vor Reap/Loeschen nochmals dessen
+terminalen Status. Der Header muss weiter dieselbe Kindgeneration ausweisen.
+Fehlende/fremde Quittungen bleiben explizit unavailable. Die bestehende
+GUI-Console-Unverfuegbarkeit(-12) wird nicht zu Erfolg umgedeutet. Keine
+zusaetzliche Datei, Fristverlaengerung, Wiederholung oder normaler Sampler.
+Native1Bind38/38/2sBroker-oder3sCaller-Timeout bleibt failed; sein endgueltiger
+Kindstatus wurde damals nicht erhalten und wird nicht geraten. Qualifikation
+des korrigierten Diagnosepfads unter88/W23 noch offen.
+
+0.87.60 WIP / Spectra89-90: Fehlerquittungen gezielt auslesen
+------------------------------------------------------------
+89 fordert nur nach einem bereits gescheiterten REPLAY einmal eine weitere
+CaptureStats-Quittung an. Der urspruengliche Fehler bleibt FAIL. Der dritte
+native Lauf verlor SSH und seinen8192B-Export mitten im Fehlerrecord; kein
+Cleanup-/Reap-/Gesamterfolg wird aus diesem Teiloriginal abgeleitet.
+
+90 ergaenzt CHECK DESKTOP /OWNER [/JSON] [/EXPORT:pfad]. /OWNER ist exklusiv
+zu den anderen Desktopcheck-Optionen. Es reserviert nur die vorhandene
+Diagnosesitzung, liest eine identitaetsgebundene kopierte Ownerdatei und
+beendet die Sitzung samt eigener Datei/Verbindung. Keine GUI-Kinder,
+Szenenarbeit, RemoteFrame-Aufnahme, Hostneuanmeldung oder erzwungener Frame.
+Ein fehlender nativer Renderowner verhindert den kopierten Zustandsbericht
+nicht. Erfolg belegt nur Bericht und eigene Bereinigung; physische Sicht
+und Latenz bleiben null. Die normale /REPLAY-Anforderung eines echten
+nativen Owners samt Originalpixel-/Fence-/Returnvertrag bleibt unveraendert.
+
+Eine explizite90-Abfrage auf unveraendertem176/23/335 ergab die gespeicherten
+4739-/4503-Timeouts; sie ist keine Wiederholung des gescheiterten GUI-Falls.
+Die Zusatzfelder des privaten Owner-JSON bleiben additive Beobachtungen,
+kein Kernel-/SDK-/Contract-ABI-Wechsel oder normaler Sampler.
+
+0.87.60 WIP / Spectra91: GUI-Ereignisablehnung mit Rohwerten
+----------------------------------------------------------
+Der originale volle Q5-Lauf unter177/23/90 endet nach bestandenem
+Desktopteil an logical-key-delivery, vor BASIC/GB/SNES. Alte Ausgaben
+enthalten weder Status-/Fenster- noch guiPushEvent-Rohcode; eine Ursache
+ist daraus nicht belegt. Original und voller Fehler bleiben erhalten.
+
+91 zeichnet nur bei einem verweigerten Ereignis die bereits vorhandenen
+Werte auf: Vorpruefungsstufe, exakterHandle, Prozessstatus/Fenster-ID,
+Ereignis, Versuch und Rohcode sowie letzte Metadaten-ID/Framegueltigkeit.
+Keine neue Statusabfrage, Clock, Aktion, Wartefrist oder Wiederholung.
+Die originale viermalige-3/Yield0-Behandlung und die nachfolgende exakte
+Completionpruefung bleiben gleich. Eine protokollierte Ablehnung kann
+auch von einer realen gleichzeitigen Beendigung stammen; der originale
+Controller entscheidet weiterhin, ob sein Gesamtergebnis fehlschlaegt.
+
+28.10.2026 aktuelle Funktionsabnahme0.87.60
+-----------------------------------------
+Aktuell Desktop177/WINSVC24/Spectra91/NVIDIA336, Kernel417/SDK105/Contract54
+und Audioartefakte bytegleich zum qualifizierten Vorstand. Betroffene18Rust-
+Owner/3Geometrie/1Clock,15WINSVC-Wire/Broker/Launchfaelle, originaler echter
+NVIDIA-Device/Power-Owner und normale Produktbuilds bestehen. KVM4 Q6
+besteht die unveraenderten Desktop- und langen60sBASIC/GB/SNES-Originale
+mit exakten Ressourcenquittungen und normalem Poweroff.
+
+OssiPC16: vier installierte Komponenten vollbytegleich/CONFIG503original/
+AutoNVIDIA336; Native4 ohne Beobachtungsfixture mit neuer Glyphe, completed
+AtlasReuse58->67/CaptureReuse77->131/visible12->19/2echtenGPUimages/Fences/
+ReadReturn/3Exit0reaps/Rest0. Displaygeneration+Reset unveraendert, kopierte
+Hostfehlertotale0. OriginalsequenziellesGAP/PCM/Progress/HDA/Desktop gruen.
+NormalerPostGPUreboot54.382s belegt aktuelle resources0/nativeDMAstopped/
+driverDisplayshutdownOK, dabei terminalerFLR. Kein pauschalergraceful oder
+Hotmodulunload-/physischerSichtHoerLatenzclaim. Vorige Native1/2/3- und Q5-
+Keyfehler bleiben getrennte Originale fuer66; der aktuelle Pass isoliert
+deren Ursachen nicht vollstaendig. Details in Docs/Core/Parallelitaet.txt.
+FinalerSTANDARD60: 87c87a4d-427c-4a9f-8c22-ac49e189dd03; Suite3/metric2/30Samples/4Worker/6Scores
+lokal und R4OS Server vollstaendig validiert, komplettes Original und frischer
+ReferenzGET normalisiert gleich; OriginalSHA256 d538b089c24b973ba14209cdad415fed71781af10051eebbc58f95e684517efd.
+Gesamt135.521406/IPC141.872165 gegen59 137.870960/146.849660 unisoliert;
+keinSpeedup-/Noise-/Regressionsursachenbeweis und keinScore-/Uploadrerun.
+Alle Originale/Kontexte/SHA256 unter ExFiles/Reports/Benchmarks/87c87a4d-427c-4a9f-8c22-ac49e189dd03/.

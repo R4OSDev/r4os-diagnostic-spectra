@@ -36,12 +36,13 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     switch (request.command) {
         .help => output.message("help", "SPECTRA " ++ @import("spectra_version").value ++ " - kernel diagnostics and explicit Desktop state\r\n" ++
             "  METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|SMP|CPUFEATURES|CPUPOWER|MCA|MICROCODE|PMU|ENTROPY|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE\r\n" ++
-            "  LOGS BOOT|SERVICE\r\n" ++
+            "  LOGS BOOT|SERVICE|APPLICATION\r\n" ++
             "  METRICS DESKTOP (passive current WINSVC/Kernel copies; excluded from ALL)\r\n" ++
             "  CHECK BOOT|PERFORMANCE|WORK|THREAD|SMP|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP|USB [options]\r\n" ++
             "  CHECK SMP [/ADMISSION|/LIFECYCLE|/POWER|/FEATURES|/FEATURES-OFFLINE:n|/MCA|/MICROCODE|/PMU|/ACCEL|/ENTROPY|/ENTROPY-NONE]\r\n" ++
             "  CHECK TEXT /CODECS (strict imported legacy/UTF-8 and exact document bytes)\r\n" ++
             "  CHECK DESKTOP [/HOST] [/RESTART] [/AUDIO] [/CAPTURE] [/REPLAY] (/REPLAY requires a native GR owner)\r\n" ++
+            "  CHECK DESKTOP /OWNER (one copied owner report; no scene work, capture or restart)\r\n" ++
             "  CHECK SUBSYSTEM [/HOST] [/SNES] (isolated Test fixtures; /SNES selects only that original pair)\r\n" ++
             "  CHECK DESKTOP /CANCEL (own real check child; expects Exit4, reap and empty resources)\r\n" ++
             "  CHECK REMOTEFRAME [/EXITOWNED] (immutable snapshots; real child exit/reap/owner cleanup)\r\n" ++

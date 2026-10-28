@@ -271,20 +271,34 @@ pub const Controller = struct {
         return self.push(index, .{ .kind = @intFromEnum(if (down) r.abi.GuiEventKind.physical_key_down else r.abi.GuiEventKind.physical_key_up), .key = usage });
     }
     fn push(self: *Controller, index: usize, event: r.abi.GuiEvent) bool {
-        if (index >= 2 or self.check.handles[index].instance_id == 0) return false;
+        if (index >= 2 or self.check.handles[index].instance_id == 0) {
+            self.check.out.record("gui-event-refusal", "SUBSYSTEM", index, .{ .stage = @as([]const u8, "owned-handle"), .event = event });
+            return false;
+        }
         const handle = self.check.handles[index];
         var info: r.abi.ProgramInstanceInfo = .{};
-        if (self.ctx.sys.programHandleStatus(&handle, &info) != 0 or
+        const status = self.ctx.sys.programHandleStatus(&handle, &info);
+        if (status != 0 or
             (info.state != @intFromEnum(r.abi.ProgramInstanceState.running) and
-                info.state != @intFromEnum(r.abi.ProgramInstanceState.close_requested)) or info.window_id < 0) return false;
+                info.state != @intFromEnum(r.abi.ProgramInstanceState.close_requested)) or info.window_id < 0)
+        {
+            self.check.out.record("gui-event-refusal", "SUBSYSTEM", index, .{ .stage = @as([]const u8, "program-window"), .handle = handle, .status = status, .state = info.state, .window = info.window_id, .event = event, .last_window_id = self.windows[index].actual_id, .last_frame_valid = self.windows[index].frame_valid });
+            return false;
+        }
         var value = event;
         value.window_id = info.window_id;
         value.tick = self.ctx.ticks();
-        const desk = self.app.desktop() orelse return false;
+        const desk = self.app.desktop() orelse {
+            self.check.out.record("gui-event-refusal", "SUBSYSTEM", index, .{ .stage = @as([]const u8, "desktop-api"), .handle = handle, .event = value });
+            return false;
+        };
         for (0..4) |attempt| {
             const rc = desk.guiPushEvent(handle.instance_id, &value);
             if (rc == 0) return true;
-            if (rc != -3 or attempt == 3) return false;
+            if (rc != -3 or attempt == 3) {
+                self.check.out.record("gui-event-refusal", "SUBSYSTEM", index, .{ .stage = @as([]const u8, "push"), .handle = handle, .state = info.state, .window = info.window_id, .event = value, .attempt = attempt, .raw = rc, .last_window_id = self.windows[index].actual_id, .last_frame_valid = self.windows[index].frame_valid });
+                return false;
+            }
             self.ctx.sleepTicks(0);
         }
         return false;

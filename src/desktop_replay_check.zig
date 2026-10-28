@@ -41,18 +41,29 @@ const Execution = struct {
 const Capture = struct {
     frame: u64,
     reused_captures: u64,
+    atlas_reused_layers: u64,
+    asset_misses: u64,
     captured_reads: u64,
     completed_reads: u64,
     failed_reads: u64,
     reads_empty: bool,
     external_receipts: u64,
 };
-const Owner = struct { owner: []const u8, active: bool, execution: ?Execution, capture: ?Capture };
+const Target = struct { adapter_id: u32, connector_id: u32, head_id: u32, device_generation: u64, connection_generation: u64, display_generation: u64 };
+const Owner = struct { owner: []const u8, active: bool, target: ?Target, execution: ?Execution, capture: ?Capture };
 const Report = struct { contract: []const u8, caller_instance: u32, caller_generation: u64, sequence: u64, outputs: []Owner };
-pub const Sample = struct { execution: Execution, capture: Capture };
+pub const Sample = struct { target: ?Target = null, execution: Execution, capture: Capture };
 pub const Snapshot = [4]?Sample;
 
 pub fn sample(app: *r.App, check: *Check, sequence: usize) !Snapshot {
+    const result = try readOwner(app, check, sequence);
+    if (result[0] == null) return error.NativeCaptureUnavailable;
+    return result;
+}
+pub fn reportOwner(app: *r.App, check: *Check, sequence: usize) !void {
+    _ = try readOwner(app, check, sequence);
+}
+fn readOwner(app: *r.App, check: *Check, sequence: usize) !Snapshot {
     var path_buffer: [128:0]u8 = undefined;
     const caller: wire.Identity = .{ .instance = check.caller.instance_id, .generation = check.caller.generation };
     const path = try wire.captureReportPath(&path_buffer, caller, sequence);
@@ -78,17 +89,16 @@ pub fn sample(app: *r.App, check: *Check, sequence: usize) !Snapshot {
     for (report.outputs) |owner| {
         if (!owner.active or (!std.mem.eql(u8, owner.owner, "native-gr") and
             !std.mem.eql(u8, owner.owner, "primary-native-gr"))) continue;
-        result[count] = .{ .execution = owner.execution orelse return error.NativeOwnerUnavailable, .capture = owner.capture orelse return error.CaptureStateWorkerOwned };
+        result[count] = .{ .target = owner.target, .execution = owner.execution orelse return error.NativeOwnerUnavailable, .capture = owner.capture orelse return error.CaptureStateWorkerOwned };
         count += 1;
     }
-    if (count == 0) return error.NativeCaptureUnavailable;
     return result;
 }
 pub fn verify(before: Snapshot, after: Snapshot, closed: Snapshot) !void {
     for (before) |entry| {
         const first = entry orelse continue;
-        const later = find(after, first.execution) orelse return error.CaptureOwnerChanged;
-        const last = find(closed, first.execution) orelse return error.CaptureOwnerChanged;
+        const later = find(after, first) orelse return error.CaptureOwnerChanged;
+        const last = find(closed, first) orelse return error.CaptureOwnerChanged;
         if (later.capture.reused_captures <= first.capture.reused_captures or
             later.capture.frame <= first.capture.frame or
             later.execution.completed_frames <= first.execution.completed_frames or
@@ -96,13 +106,15 @@ pub fn verify(before: Snapshot, after: Snapshot, closed: Snapshot) !void {
         if (later.capture.captured_reads <= first.capture.captured_reads or
             later.capture.completed_reads <= first.capture.completed_reads or
             later.capture.failed_reads != first.capture.failed_reads) return error.NativeImageReadMissing;
+        if (later.capture.asset_misses <= first.capture.asset_misses or
+            later.capture.atlas_reused_layers <= first.capture.atlas_reused_layers) return error.AtlasContentReuseMissing;
         if (!last.capture.reads_empty or last.capture.external_receipts != 0 or
             last.capture.captured_reads != last.capture.completed_reads or
             last.capture.failed_reads != first.capture.failed_reads) return error.NativeImageReleaseMissing;
     }
 }
-fn find(snapshot: Snapshot, owner: Execution) ?Sample {
-    for (snapshot) |entry| if (entry) |s| if (s.execution.same(owner)) return s;
+fn find(snapshot: Snapshot, owner: Sample) ?Sample {
+    for (snapshot) |entry| if (entry) |s| if (s.execution.same(owner.execution) and std.meta.eql(s.target, owner.target)) return s;
     return null;
 }
 
@@ -128,6 +140,13 @@ pub fn run(app: *r.App, check: *Check) !void {
             check.out.unavailable("native-image-child", "No exact child-qualified status available before cleanup");
             break :blk false;
         };
+        // The original operation is already failed. One distinct copied
+        // owner snapshot may expose the exact service failure that preceded
+        // recovery. It cannot turn the failed work into a replay/return pass.
+        _ = sample(app, check, 1) catch blk: {
+            check.out.unavailable("desktop-failure-owner", "No exact post-failure owner snapshot available");
+            break :blk @as(Snapshot, .{null} ** 4);
+        };
     }
     const target: wire.Identity = .{ .instance = check.handles[0].instance_id, .generation = check.handles[0].generation };
     _ = try check.call(.bind, target, 0, 0);
@@ -146,5 +165,5 @@ pub fn run(app: *r.App, check: *Check) !void {
     try check.pause(300);
     const closed = try sample(app, check, 2);
     try verify(before, after, closed);
-    check.out.record("capture-replay", "DESKTOP", 0, .{ .cpu_capture_reused = true, .native_reads_returned = true, .same_native_owner = true, .native_producer = @as([]const u8, "original WINIMAGE two device-local images/GPU fences/Take/Return/reuse/Close"), .physical_visibility = @as(?bool, null) });
+    check.out.record("capture-replay", "DESKTOP", 0, .{ .cpu_capture_reused = true, .atlas_unrelated_content_reused = true, .native_reads_returned = true, .same_native_owner = true, .native_producer = @as([]const u8, "WINIMAGE fresh child-qualified glyph and two device-local images/GPU fences/Take/Return/reuse/Close"), .physical_visibility = @as(?bool, null) });
 }
