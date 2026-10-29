@@ -68,11 +68,13 @@ pub const Controller = struct {
     pub const headlessSubsystemLaunchFailure = scenes.headlessSubsystemLaunchFailure;
     pub const waitForHeadlessSubsystemAudio = scenes.waitForHeadlessSubsystemAudio;
 
-    pub fn init(app: *r.App, out: *Output) !Controller {
+    pub fn init(app: *r.App, out: *Output, require_basic_fixtures: bool) !Controller {
         if (!r4std.init(app.startContext())) return error.StandardLibrary;
         const sys = app.system();
-        if (!sys.exists("C:\\R4OS\\SUBSYSTEMS\\test.basic\\SUBSYSOK.R4X") or
-            !sys.exists("C:\\TEMP\\SUBSYSTEM-A.BAS") or !sys.exists("C:\\TEMP\\SUBSYSTEM-B.BAS")) return error.TestFixturesUnavailable;
+        // The targeted SNES acceptance never opens these BASIC fixtures.
+        // Full subsystem acceptance still requires every original prerequisite.
+        if (require_basic_fixtures and (!sys.exists("C:\\R4OS\\SUBSYSTEMS\\test.basic\\SUBSYSOK.R4X") or
+            !sys.exists("C:\\TEMP\\SUBSYSTEM-A.BAS") or !sys.exists("C:\\TEMP\\SUBSYSTEM-B.BAS"))) return error.TestFixturesUnavailable;
         const hz = sys.ticksFromMilliseconds(1000);
         if (hz == 0 or hz > std.math.maxInt(u32)) return error.Clock;
         var value: Controller = .{ .app = app, .ctx = .{ .sys = sys }, .check = .{ .sys = sys, .out = out, .desk = app.desktop(), .resource_group = "SUBSYSTEM" }, .monotonic_hz = @intCast(hz), .metadata_interval_ticks = @max(1, sys.ticksFromMilliseconds(50)) };

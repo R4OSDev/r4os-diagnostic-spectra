@@ -522,6 +522,11 @@ pub fn smokeR4SnesProductPath(self: *Controller) bool {
         }
     }
 
+    const presentation = @import("desktop_replay_check.zig");
+    const before_output = presentation.presentationSample(self.app, &self.check, 0) catch |err| {
+        self.check.out.unavailable("SUBSYSTEM-PRESENTATION", @errorName(err));
+        return self.headlessSubsystemFailure("r4snes-presentation-before");
+    };
     const exercise_started = self.ctx.ticks();
     const exercise_ticks = @as(u64, @max(self.monotonic_hz, 1)) * 60;
     const focus_interval = @as(u64, @max(self.monotonic_hz, 1)) * 10;
@@ -579,7 +584,27 @@ pub fn smokeR4SnesProductPath(self: *Controller) bool {
         if (self.failed) return self.headlessSubsystemFailure("controller-transport-or-cancelled");
         self.ctx.sleepTicks(1);
     }
-    if (focus_round < 5 or self.render_stats.redraws <= redraws_before or
+    const after_output = presentation.presentationSample(self.app, &self.check, 1) catch |err| {
+        self.check.out.unavailable("SUBSYSTEM-PRESENTATION", @errorName(err));
+        return self.headlessSubsystemFailure("r4snes-presentation-after");
+    };
+    const output_progress = @import("desktop_owner_report.zig").progress(before_output, after_output) catch |err| {
+        self.check.out.unavailable("SUBSYSTEM-PRESENTATION", @errorName(err));
+        return self.headlessSubsystemFailure("r4snes-presentation-progress");
+    };
+    self.check.out.record("presentation-progress", "SUBSYSTEM", 0, .{
+        .contract = @as([]const u8, "same-owner-native-receipts-or-original-cpu-v1"),
+        .mode = @tagName(output_progress),
+        .focus_rounds = focus_round,
+        .cpu_redraws_before = redraws_before,
+        .cpu_redraws_after = self.render_stats.redraws,
+        .cpu_lost_before = lost_frames_before,
+        .cpu_lost_after = self.render_stats.present_lost_frames,
+        .cpu_failures_before = present_failures_before,
+        .cpu_failures_after = self.render_stats.present_failures,
+        .physical_visibility = @as(?bool, null),
+    });
+    if (focus_round < 5 or (output_progress == .cpu and self.render_stats.redraws <= redraws_before) or
         self.render_stats.present_lost_frames != lost_frames_before or
         self.render_stats.present_failures != present_failures_before)
     {
@@ -780,9 +805,13 @@ pub fn headlessSubsystemFailure(self: *Controller, comptime reason: []const u8) 
         if (self.check.session and self.check.desktop.valid() and
             !self.ctx.sys.programShouldClose() and self.ctx.ticks() < self.check.deadline)
         {
-            @import("desktop_replay_check.zig").reportOwner(self.app, &self.check, 0) catch |err| {
-                self.check.out.unavailable("SUBSYSTEM-OWNER", @errorName(err));
-            };
+            for (self.check.replay_reports, 0..) |owned, sequence| {
+                if (owned) continue;
+                @import("desktop_replay_check.zig").reportOwner(self.app, &self.check, sequence) catch |err| {
+                    self.check.out.unavailable("SUBSYSTEM-OWNER", @errorName(err));
+                };
+                break;
+            }
         }
     }
     if (self.ctx.exists(subsystem_host_test_marker_path)) return false;

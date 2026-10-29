@@ -21,7 +21,7 @@ pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
         out.record("result", "SUBSYSTEM", 0, .{ .exit_code = @as(i32, 1), .success = false, .cleanup_acknowledged = host.finish(app.system(), out) });
         return 1;
     };
-    var control = Controller.init(app, out) catch |err| {
+    var control = Controller.init(app, out, !snes_only) catch |err| {
         out.unavailable("SUBSYSTEM", @errorName(err));
         failure(app.system(), "SUBSYSTEM runtime bootstrap FAILED: controller-init\r\n");
         return 1;

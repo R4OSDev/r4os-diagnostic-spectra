@@ -24,34 +24,11 @@ fn nativeReport(app: *r.App, check: *Check, owner: r.abi.ProgramProcessHandle) !
     check.out.message("native-image-child", bytes, false);
     return Status.succeeded(bytes, identity);
 }
-const Execution = struct {
-    device_address: u64,
-    device_handle_generation: u64,
-    backend_device_generation: u64,
-    reset_generation: u64,
-    completed_frames: u64,
-    visible_frames: u64,
-    fn same(self: Execution, other: Execution) bool {
-        return self.device_address == other.device_address and
-            self.device_handle_generation == other.device_handle_generation and
-            self.backend_device_generation == other.backend_device_generation and
-            self.reset_generation == other.reset_generation;
-    }
-};
-const Capture = struct {
-    frame: u64,
-    reused_captures: u64,
-    atlas_reused_layers: u64,
-    asset_misses: u64,
-    captured_reads: u64,
-    completed_reads: u64,
-    failed_reads: u64,
-    reads_empty: bool,
-    external_receipts: u64,
-};
-const Target = struct { adapter_id: u32, connector_id: u32, head_id: u32, device_generation: u64, connection_generation: u64, display_generation: u64 };
-const Owner = struct { owner: []const u8, active: bool, target: ?Target, execution: ?Execution, capture: ?Capture };
-const Report = struct { contract: []const u8, caller_instance: u32, caller_generation: u64, sequence: u64, outputs: []Owner };
+const owner_report = @import("desktop_owner_report.zig");
+const Execution = owner_report.Execution;
+const Capture = owner_report.Capture;
+const Target = owner_report.Target;
+const Report = owner_report.Report;
 pub const Sample = struct { target: ?Target = null, execution: Execution, capture: Capture };
 pub const Snapshot = [4]?Sample;
 
@@ -64,6 +41,17 @@ pub fn reportOwner(app: *r.App, check: *Check, sequence: usize) !void {
     _ = try readOwner(app, check, sequence);
 }
 fn readOwner(app: *r.App, check: *Check, sequence: usize) !Snapshot {
+    const observed = try presentationSample(app, check, sequence);
+    var result: Snapshot = .{null} ** 4;
+    for (observed.owners, 0..) |entry, index| if (entry) |owner| {
+        result[index] = .{ .target = owner.target, .execution = owner.execution, .capture = owner.capture orelse return error.CaptureStateWorkerOwned };
+    };
+    return result;
+}
+// Same copied report and cleanup ownership as replay, without demanding a CPU
+// capture when only the existing provider presentation receipts are required.
+pub fn presentationSample(app: *r.App, check: *Check, sequence: usize) !owner_report.Observation {
+    if (sequence >= check.replay_reports.len) return error.CaptureSequence;
     var path_buffer: [128:0]u8 = undefined;
     const caller: wire.Identity = .{ .instance = check.caller.instance_id, .generation = check.caller.generation };
     const path = try wire.captureReportPath(&path_buffer, caller, sequence);
@@ -84,16 +72,9 @@ fn readOwner(app: *r.App, check: *Check, sequence: usize) !Snapshot {
         report.sequence != sequence or report.outputs.len > 4) return error.CaptureReportIdentity;
     check.out.ownerJson("capture-owner", "DESKTOP", sequence, bytes);
     if (check.out.failed) return error.Output;
-    var result: Snapshot = .{null} ** 4;
-    var count: usize = 0;
-    for (report.outputs) |owner| {
-        if (!owner.active or (!std.mem.eql(u8, owner.owner, "native-gr") and
-            !std.mem.eql(u8, owner.owner, "primary-native-gr"))) continue;
-        result[count] = .{ .target = owner.target, .execution = owner.execution orelse return error.NativeOwnerUnavailable, .capture = owner.capture orelse return error.CaptureStateWorkerOwned };
-        count += 1;
-    }
-    return result;
+    return owner_report.observe(report);
 }
+
 pub fn verify(before: Snapshot, after: Snapshot, closed: Snapshot) !void {
     for (before) |entry| {
         const first = entry orelse continue;

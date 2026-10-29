@@ -1,4 +1,5 @@
 comptime {
+    _ = @import("desktop_owner_report.zig");
     _ = @import("checks/simd/environment_image.zig");
     _ = @import("mca_decode.zig");
     _ = @import("microcode_decode.zig");
