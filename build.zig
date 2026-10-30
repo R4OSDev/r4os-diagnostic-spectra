@@ -28,6 +28,15 @@ pub fn build(b: *std.Build) void {
     const libraries_build = b.lazyImport(@This(), "r4os_libraries") orelse return;
     const libraries_dep = b.dependencyFromBuildZig(libraries_build, .{});
     const sdk = sdk_build.sdk(b, sdk_dep, .{});
+    const output_module = b.createModule(.{
+        .root_source_file = b.path("src/output.zig"),
+        .target = b.graph.host,
+        .optimize = .Debug,
+    });
+    output_module.addImport("r4os", sdk.createR4osModule(b.graph.host, .Debug));
+    const output_tests = b.addRunArtifact(b.addTest(.{ .root_module = output_module, .filters = &.{"audio duration"} }));
+    b.step("output-test", "Actual unavailable audio duration text and JSON presentation").dependOn(&output_tests.step);
+    test_step.dependOn(&output_tests.step);
     _ = sdk.addR4MFWithOptions(b.path("module.R4MF"), .{
         .zig_module_roots = &.{ libraries_dep.namedLazyPath("r4std_zig_binding"), b.path("Version.zig"), desktop_wire_path, active_wire_path, launch_wire_path, image_case_path },
     });

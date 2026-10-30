@@ -237,3 +237,12 @@ with one owned AP worker and exact retirement. It keeps every online CPU
 schedulable. It is separate from the unchanged default `/KERNEL` (127) and
 `/KERNEL:WORKERS` (128); combining these profiles is rejected. No idle sampler
 or observation receipt writes run outside this requested check.
+
+Spectra0.1.95 checks the explicit retirement of the nine audio duration
+fields (Contract0.64.61) instead of total/max/last self-consistency. Its
+original actual PCM acceptance, high-water/loss and Close checks remain.
+Audio detail latency is printed as unavailable; historical exports are not
+rewritten. All STANDARD workloads, amounts and scoring contracts are unchanged.
+The generic SUMMARY export also represents each retired duration as
+value:null with unavailable:retired in JSON, independent of detail mode.
+Historical measured numbers and unrelated full-width counters stay numeric.

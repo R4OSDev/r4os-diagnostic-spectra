@@ -1933,7 +1933,7 @@ const App = struct {
             (summary.flags & r4os.abi.performance_flag_driver_workqueue_ready) != 0 and
             (summary.flags & r4os.abi.performance_flag_storage_driver_completion_ready) != 0 and
             (summary.flags & r4os.abi.performance_flag_display_responsiveness_ready) != 0 and
-            (summary.flags & r4os.abi.performance_flag_audio_latency_ready) != 0 and
+            (summary.flags & r4os.abi.performance_flag_audio_latency_ready) == 0 and
             (summary.flags & r4os.abi.performance_flag_loader_performance_ready) != 0 and
             (summary.flags & r4os.abi.performance_flag_hot_path_index_ready) != 0 and
             (summary.flags & r4os.abi.performance_flag_loader_memory_ready) != 0;
@@ -1977,14 +1977,8 @@ const App = struct {
             summary.display_present_bytes_total > 0 and
             summary.display_present_max_ticks >= summary.display_present_last_ticks and
             summary.display_present_total_ticks >= summary.display_present_last_ticks;
-        const audio_latency_ok = summary.audio_stream_writes > 0 and
+        const audio_work_ok = audioDurationsUnavailable(summary) and summary.audio_stream_writes > 0 and
             summary.audio_stream_high_water_bytes > 0 and
-            summary.audio_stream_write_max_ticks >= summary.audio_stream_write_last_ticks and
-            summary.audio_stream_write_total_ticks >= summary.audio_stream_write_last_ticks and
-            summary.audio_backend_write_max_ticks >= summary.audio_backend_write_last_ticks and
-            summary.audio_backend_write_total_ticks >= summary.audio_backend_write_last_ticks and
-            summary.audio_backend_refill_max_ticks >= summary.audio_backend_refill_last_ticks and
-            summary.audio_backend_refill_total_ticks >= summary.audio_backend_refill_last_ticks and
             summary.audio_stream_dropped_bytes == 0;
         const loader_perf_ok = summary.loader_initialized != 0 and
             summary.loader_started != 0 and
@@ -2403,7 +2397,7 @@ const App = struct {
             service_payload_ok and
             service_lock_ok and
             display_responsiveness_ok and
-            audio_latency_ok and
+            audio_work_ok and
             loader_perf_ok and
             loader_memory_ok and
             hot_path_ok and
@@ -4671,14 +4665,10 @@ const App = struct {
             self.printCheck("Audio write conformance", false);
             return false;
         };
-        const ok = written == @as(i32, @intCast(pcm.len)) and
+        const ok = audioDurationsUnavailable(after) and written == @as(i32, @intCast(pcm.len)) and
             closed == 0 and
             after.audio_stream_writes > before.audio_stream_writes and
             after.audio_stream_high_water_bytes >= before.audio_stream_high_water_bytes and
-            after.audio_stream_write_total_ticks >= before.audio_stream_write_total_ticks and
-            after.audio_stream_write_max_ticks >= after.audio_stream_write_last_ticks and
-            after.audio_backend_write_total_ticks >= before.audio_backend_write_total_ticks and
-            after.audio_backend_write_max_ticks >= after.audio_backend_write_last_ticks and
             after.audio_stream_dropped_bytes == before.audio_stream_dropped_bytes;
         self.printCheck("Audio write conformance", ok);
         if (!ok) {
@@ -4688,14 +4678,7 @@ const App = struct {
             self.sys.printU64(after.audio_stream_writes);
             self.sys.write(" high=");
             self.sys.printU64(after.audio_stream_high_water_bytes);
-            self.sys.write(" ticks=");
-            self.sys.printU64(after.audio_stream_write_last_ticks);
-            self.sys.write("/");
-            self.sys.printU64(after.audio_stream_write_max_ticks);
-            self.sys.write(" backend=");
-            self.sys.printU64(after.audio_backend_write_last_ticks);
-            self.sys.write("/");
-            self.sys.printU64(after.audio_backend_write_max_ticks);
+            self.sys.write(" duration=unavailable(retired)");
             self.sys.write(" rc=");
             self.sys.printI32(written);
             self.sys.write("/");
@@ -4703,6 +4686,23 @@ const App = struct {
             self.sys.println("");
         }
         return ok;
+    }
+
+
+    fn audioDurationsUnavailable(summary: r4os.abi.ProgramPerformanceSummary) bool {
+        const values = [_]u64{
+            summary.audio_stream_write_total_ticks,
+            summary.audio_stream_write_max_ticks,
+            summary.audio_stream_write_last_ticks,
+            summary.audio_backend_write_total_ticks,
+            summary.audio_backend_write_max_ticks,
+            summary.audio_backend_write_last_ticks,
+            summary.audio_backend_refill_total_ticks,
+            summary.audio_backend_refill_max_ticks,
+            summary.audio_backend_refill_last_ticks,
+        };
+        for (values) |value| if (value != r4os.abi.audio_duration_ticks_unavailable) return false;
+        return (summary.flags & r4os.abi.performance_flag_audio_latency_ready) == 0;
     }
 
     fn testFpuState(self: *App, summary: r4os.abi.ProgramPerformanceSummary) bool {
@@ -5781,14 +5781,7 @@ const App = struct {
         self.sys.printU64(summary.audio_stream_high_water_bytes);
         self.sys.write(" drop=");
         self.sys.printU64(summary.audio_stream_dropped_bytes);
-        self.sys.write(" writeTicks=");
-        self.sys.printU64(summary.audio_stream_write_last_ticks);
-        self.sys.write("/");
-        self.sys.printU64(summary.audio_stream_write_max_ticks);
-        self.sys.write(" backendTicks=");
-        self.sys.printU64(summary.audio_backend_write_last_ticks);
-        self.sys.write("/");
-        self.sys.printU64(summary.audio_backend_write_max_ticks);
+        self.sys.write(" duration=unavailable(retired)");
         self.sys.write(" refills=");
         self.sys.printU64(summary.audio_backend_refills);
         self.sys.write("/");

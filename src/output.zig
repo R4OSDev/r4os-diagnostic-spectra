@@ -164,13 +164,17 @@ pub const Output = struct {
             .int, .comptime_int => {
                 const value_unit = comptime unit(name);
                 const disabled = self.detail != null and !self.detail.? and detailField(group, name);
+                const retired = if (comptime audioDurationField(name))
+                    std.mem.eql(u8, group, "summary") and data == r4os.abi.audio_duration_ticks_unavailable
+                else
+                    false;
                 if (json) {
                     self.write("{\"value\":");
-                    if (disabled) self.write("null") else { self.write("\""); self.number(data); self.write("\""); }
+                    if (retired or disabled) self.write("null") else { self.write("\""); self.number(data); self.write("\""); }
                     self.write(",\"unit\":"); self.string(value_unit);
-                    if (disabled) self.write(",\"unavailable\":\"detail-disabled\"");
+                    if (retired) self.write(",\"unavailable\":\"retired\"") else if (disabled) self.write(",\"unavailable\":\"detail-disabled\"");
                     self.write("}");
-                } else if (disabled) self.write("unavailable (detail disabled)") else { self.number(data); self.write(" "); self.write(value_unit); }
+                } else if (retired) self.write("unavailable (retired)") else if (disabled) self.write("unavailable (detail disabled)") else { self.number(data); self.write(" "); self.write(value_unit); }
             },
             .bool => self.write(if (data) "true" else "false"),
             .@"enum" => if (json) self.string(@tagName(data)) else self.write(@tagName(data)),
@@ -243,6 +247,15 @@ fn unit(comptime name: []const u8) []const u8 {
     return "count";
 }
 
+fn audioDurationField(comptime name: []const u8) bool {
+    inline for (.{ "audio_stream_write_", "audio_backend_write_", "audio_backend_refill_" }) |prefix| {
+        inline for (.{ "total_ticks", "max_ticks", "last_ticks" }) |suffix| {
+            if (std.mem.eql(u8, name, prefix ++ suffix)) return true;
+        }
+    }
+    return false;
+}
+
 fn detailField(group: []const u8, comptime name: []const u8) bool {
     if (std.mem.eql(u8, name, "loader_metadata_logical_reads") or
         std.mem.eql(u8, name, "loader_metadata_logical_bytes") or
@@ -266,4 +279,40 @@ fn detailField(group: []const u8, comptime name: []const u8) bool {
         std.mem.eql(u8, name, "lock_tracking_drops"))) return std.mem.eql(u8, group, "summary");
     if (std.mem.eql(u8, group, "work") and (std.mem.eql(u8, name, "timing_unavailable") or std.mem.eql(u8, name, "critical_timing_unavailable") or std.mem.eql(u8, name, "long_callbacks"))) return true;
     return false;
+}
+
+test "audio duration JSON marks all nine retired fields independently of detail mode" {
+    const t = std.testing;
+    inline for (.{ "audio_stream_write_total_ticks", "audio_stream_write_max_ticks", "audio_stream_write_last_ticks", "audio_backend_write_total_ticks", "audio_backend_write_max_ticks", "audio_backend_write_last_ticks", "audio_backend_refill_total_ticks", "audio_backend_refill_max_ticks", "audio_backend_refill_last_ticks" }) |name| {
+        for ([_]?bool{ null, false, true }) |detail| {
+            var out: Output = .{ .sys = undefined, .format = .json, .detail = detail };
+            out.renderValue("summary", name, r4os.abi.audio_duration_ticks_unavailable, true);
+            try t.expectEqualStrings("{\"value\":null,\"unit\":\"event-ticks\",\"unavailable\":\"retired\"}", out.buffer[0..out.used]);
+        }
+    }
+}
+
+test "audio duration JSON retains historical zero and nonzero ticks and unrelated full-width counters" {
+    const t = std.testing;
+    inline for (.{ @as(u64, 0), @as(u64, 27) }) |ticks| {
+        var out: Output = .{ .sys = undefined, .format = .json };
+        out.renderValue("summary", "audio_stream_write_last_ticks", ticks, true);
+        var expected: [100]u8 = undefined;
+        const text = try std.fmt.bufPrint(&expected, "{{\"value\":\"{d}\",\"unit\":\"event-ticks\"}}", .{ticks});
+        try t.expectEqualStrings(text, out.buffer[0..out.used]);
+    }
+    var out: Output = .{ .sys = undefined, .format = .json };
+    out.renderValue("summary", "audio_stream_writes", std.math.maxInt(u64), true);
+    try t.expectEqualStrings("{\"value\":\"18446744073709551615\",\"unit\":\"count\"}", out.buffer[0..out.used]);
+}
+
+test "audio duration text reports retirement without changing detail-disabled fields" {
+    const t = std.testing;
+    var out: Output = .{ .sys = undefined, .format = .text, .detail = true };
+    out.renderValue("summary", "audio_backend_refill_max_ticks", r4os.abi.audio_duration_ticks_unavailable, false);
+    try t.expectEqualStrings("unavailable (retired)", out.buffer[0..out.used]);
+    out.used = 0;
+    out.detail = false;
+    out.renderValue("summary", "lock_order_violations", @as(u64, 0), false);
+    try t.expectEqualStrings("unavailable (detail disabled)", out.buffer[0..out.used]);
 }
