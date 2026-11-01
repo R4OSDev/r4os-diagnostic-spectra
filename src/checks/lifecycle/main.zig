@@ -204,6 +204,16 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     if (hasArg(ctx.sys.argsRaw(), lifecycle_thread_exit_arg)) ctx.sys.threadExit(89);
     if (hasArg(ctx.sys.argsRaw(), dynamic_thread_hold_arg)) return dynamicThreadHold(&ctx);
     if (hasArg(ctx.sys.argsRaw(), "/COMPUTEHOLD")) return @import("compute_workers.zig").hold(ctx.sys);
+    if (hasArg(ctx.sys.argsRaw(), "/ASYNCLIFECYCLE")) {
+        const ok = testLifecycleAsyncThreads(&ctx);
+        ctx.sys.println(if (ok) "SPECTRA LIFECYCLE asynclifecycle result: OK" else "SPECTRA LIFECYCLE asynclifecycle result: FAILED");
+        return if (ok) 0 else 1;
+    }
+    if (hasArg(ctx.sys.argsRaw(), "/SERVICELIFECYCLE")) {
+        const ok = warmLifecycleServices(&ctx) and testLifecycleServices(&ctx);
+        ctx.sys.println(if (ok) "SPECTRA LIFECYCLE services result: OK" else "SPECTRA LIFECYCLE services result: FAILED");
+        return if (ok) 0 else 1;
+    }
     ctx.sys.println("SPECTRA LIFECYCLE");
     if (hasArg(ctx.sys.argsRaw(), "/WATCHCANCEL")) return testWatchCancellation(&ctx, false);
     if (hasArg(ctx.sys.argsRaw(), "/STANDARDCANCEL")) return testWatchCancellation(&ctx, true);
@@ -1129,12 +1139,18 @@ fn runProgramLifecycle(ctx: *DiagApi) bool {
     if (!ctx.dev.hasFn("program_registry_summary_v2") or !ctx.dev.hasFn("program_registry_self_test_v2"))
         return programLifecycleFail(ctx, "R4DEV lifecycle telemetry missing");
     if (!ctx.sys.hasFn("program_spawn_handle") or !ctx.sys.hasFn("program_handle_wait") or
-        !ctx.sys.hasFn("program_handle_reap") or !ctx.sys.hasFn("program_completion_read"))
+        !ctx.sys.hasFn("program_handle_reap") or !ctx.sys.hasFn("program_completion_read") or
+        !ctx.desk.hasFn("program_spawn_with_console_host_handle"))
         return programLifecycleFail(ctx, "R4SYS owned completion API missing");
 
     ctx.sys.println("SPECTRA LIFECYCLE programlifecycle begin");
     if (!testCurrentR4DevCanaries(ctx)) return false;
     if (!lifecycleWarmup(ctx)) return programLifecycleFail(ctx, "warmup failed");
+    if (!warmLifecycleConsoleTree(ctx)) return programLifecycleFail(ctx, "console-tree warmup failed");
+    // The measured service case already needs these same real warm calls.
+    // Materialize its legitimate stack page-table capacity before the ORIGINAL
+    // global baseline, preserving every later global and local equality.
+    if (!warmLifecycleServices(ctx)) return false;
     const baseline = captureRuntimeBaseline(ctx) orelse return programLifecycleFail(ctx, "baseline unavailable");
     const registry = readProgramRegistry(ctx) orelse return programLifecycleFail(ctx, "registry baseline unavailable");
     // The diagnostic itself and the deliberately running SVCSTALL fixture
@@ -1156,8 +1172,10 @@ fn runProgramLifecycle(ctx: *DiagApi) bool {
     // Keep the 72-cycle blocked-I/O stress last so deterministic structural,
     // ownership and failure-phase defects surface quickly during development.
     if (!testLifecycleAsyncThreads(ctx)) return false;
-    if (!waitLifecycleBaseline(ctx, baseline, registry, 3000))
+    if (!waitLifecycleBaseline(ctx, baseline, registry, 3000)) {
+        printLifecycleBaselineMismatch(ctx, baseline, registry);
         return programLifecycleFail(ctx, "final lifecycle quiescence missing");
+    }
     const final = readProgramRegistry(ctx) orelse return programLifecycleFail(ctx, "final registry unavailable");
     ctx.sys.write("SPECTRA LIFECYCLE programlifecycle quiescence completion=");
     const baseline_completions = @as(u64, registry.completion_pending) + @as(u64, registry.completion_ready);
@@ -1215,8 +1233,12 @@ fn lifecycleWarmup(ctx: *DiagApi) bool {
     // ring. The following round must then return to this stable warm baseline;
     // a cold one-child baseline would misclassify retained allocator capacity
     // as a lifecycle leak.
+    // Each completion/output fixture owns its terminal capture. An inherited
+    // parent transcript intentionally retains sealed producer blocks after
+    // Reap, which is a different lifetime from the process baseline here.
+    // Warm the same explicit host shape used by the measured ring.
     for (&handles) |*handle| {
-        if (ctx.sys.programSpawnHandle(cleanup_path, route.arguments("LIFECYCLE", "/LIFECYCLEEXIT 0 0").ptr(), .auto, handle) != r4os.abi.program_handle_ok)
+        if (ctx.desk.programSpawnWithConsoleHostHandle(cleanup_path, route.arguments("LIFECYCLE", "/LIFECYCLEEXIT 0 0").ptr(), .auto, .terminal_mode, handle) != r4os.abi.program_handle_ok)
             return false;
     }
     for (&handles) |*handle| {
@@ -1237,7 +1259,7 @@ fn testLifecycleCompletionRing(ctx: *DiagApi, baseline: RuntimeBaseline, registr
     defer cleanupLifecycleHandles(ctx, handles[0..]);
 
     for (&handles, 0..) |*handle, index| {
-        if (ctx.sys.programSpawnHandle(cleanup_path, route.arguments("LIFECYCLE", lifecycle_ring_args[index]).ptr(), .auto, handle) != r4os.abi.program_handle_ok)
+        if (ctx.desk.programSpawnWithConsoleHostHandle(cleanup_path, route.arguments("LIFECYCLE", lifecycle_ring_args[index]).ptr(), .auto, .terminal_mode, handle) != r4os.abi.program_handle_ok)
             return programLifecycleFail(ctx, "ring spawn failed");
     }
     for (&handles, &completions, 0..) |*handle, *completion, index| {
@@ -1342,7 +1364,10 @@ fn testLifecycleLegacyIdCompletion(ctx: *DiagApi) bool {
     const baseline = captureRuntimeBaseline(ctx) orelse return programLifecycleFail(ctx, "legacy-ID baseline unavailable");
     const registry = readProgramRegistry(ctx) orelse return programLifecycleFail(ctx, "legacy-ID registry unavailable");
 
-    const generic_raw = ctx.sys.programSpawn(cleanup_path, route.arguments("LIFECYCLE", "/LIFECYCLEEXIT 61 64").ptr(), .console);
+    // Both public adapters enter the same Kernel legacy launch operation1;
+    // only this fixture's explicit host differs. Keep the raw legacy IDs,
+    // complete64/32-byte outputs, collision seam and single-use Reap oracles.
+    const generic_raw = ctx.sys.programSpawnWithConsoleHost(cleanup_path, route.arguments("LIFECYCLE", "/LIFECYCLEEXIT 61 64").ptr(), .console, .terminal_mode);
     if (generic_raw <= 0) return programLifecycleFail(ctx, "legacy generic spawn failed");
     const generic_id: u32 = @intCast(generic_raw);
     if (!waitLegacyIdDoneWithOutput(ctx, generic_id, 61, "lifecycle-completion-output", 10000))
@@ -1355,7 +1380,7 @@ fn testLifecycleLegacyIdCompletion(ctx: *DiagApi) bool {
     if (ctx.dev.programRegistrySelfTestV2(&force) <= 0 or force.lifecycle_result != r4os.abi.program_handle_ok or
         force.applied_next_id != generic_id)
         return programLifecycleFail(ctx, "legacy completion collision seam failed");
-    const collision_raw = ctx.sys.programSpawn(cleanup_path, route.arguments("LIFECYCLE", "/LIFECYCLEEXIT 63 32").ptr(), .console);
+    const collision_raw = ctx.sys.programSpawnWithConsoleHost(cleanup_path, route.arguments("LIFECYCLE", "/LIFECYCLEEXIT 63 32").ptr(), .console, .terminal_mode);
     if (collision_raw <= 0 or collision_raw == generic_raw)
         return programLifecycleFail(ctx, "legacy completion ID collision was admitted");
     const collision_id: u32 = @intCast(collision_raw);
@@ -1569,7 +1594,12 @@ fn testLifecycleAsyncThreads(ctx: *DiagApi) bool {
     const warm = captureRuntimeBaseline(ctx) orelse return programLifecycleFail(ctx, "async warm baseline unavailable");
     if (!sameTotals(cold.resources, warm.resources) or cold.instance_count != warm.instance_count or
         !sameStorageCurrent(cold.storage, warm.storage))
+    {
+        // Report the two values already captured by the original assertion;
+        // reuse the existing failure formatter, without another measured query.
+        printBaselineDiff(ctx, cold, warm);
         return programLifecycleFail(ctx, "async warm owner baseline mismatch");
+    }
 
     var cycle: u32 = 0;
     while (cycle < cycles) : (cycle += 1) {
@@ -1611,8 +1641,15 @@ fn runLifecycleKillWaitCycle(
         for (0..tail_len) |i| args_buffer[prefix.len + i] = args_buffer[old_prefix.len + i];
         args_buffer[prefix.len + tail_len] = 0;
     }
-    var client = spawnPolicy(ctx, async_io_path, route.arguments("ASYNC_IO", args).ptr(), .auto) orelse
-        return programLifecycleFail(ctx, "async/thread client spawn failed");
+    var client_path = r4os.FilePath.parse(async_io_path) catch
+        return programLifecycleFail(ctx, "async/thread client path invalid");
+    // This fixture keeps its original worker/start/request output. A private
+    // console capture makes that transcript end with its actual owned Reap,
+    // instead of deliberately surviving through the parent's inherited log.
+    var client = switch (ctx.resources.spawnWithConsoleHost(client_path.asZ(), route.arguments("ASYNC_IO", args).ptr(), .auto, .terminal_mode)) {
+        .process => |process| process,
+        .failure => return programLifecycleFail(ctx, "async/thread client spawn failed"),
+    };
     defer cleanupProcess(ctx, &client);
     const client_id = client.instanceId();
     if (!waitForLifecycleClientIoWait(ctx, &client, endpoint_id, expected_requests, expected_responses, 3000))
@@ -1694,6 +1731,43 @@ fn containsBytes(haystack: []const u8, needle: []const u8) bool {
             }
         }
         if (equal) return true;
+    }
+    return false;
+}
+
+// The24 immediate exits warm Registry capacity, not simultaneous live
+// terminal-window Tasks. The real depth4 shape also warms the existing bounded
+// 64KB Task-stack cache and resident paging paths. Their cold allocation is
+// not a process lifetime. All measured waits below still require exact memory
+// equality; this separate warm phase first proves every owned lifetime ended.
+fn warmLifecycleConsoleTree(ctx: *DiagApi) bool {
+    const before = captureRuntimeBaseline(ctx) orelse return false;
+    const registry = readProgramRegistry(ctx) orelse return false;
+    var handles = [_]r4os.abi.ProgramProcessHandle{.{}};
+    defer cleanupLifecycleHandles(ctx, handles[0..]);
+    const root = &handles[0];
+    if (ctx.desk.programSpawnWithConsoleHostHandle(cleanup_path, route.arguments("LIFECYCLE", "/LIFECYCLEHOST 4").ptr(), .auto, .terminal_window, root) != r4os.abi.program_handle_ok or
+        !waitLifecycleTreeLive(ctx, root, registry.live_slots + 4, 4000) or
+        ctx.sys.programHandleRequestClose(root) != r4os.abi.program_handle_ok) return false;
+    var completion: r4os.abi.ProgramProcessCompletion = .{};
+    if (ctx.sys.programHandleWait(root, 10000, &completion) != r4os.abi.program_handle_ok or
+        !sameLifecycleHandle(root.*, completion.handle) or
+        ctx.sys.programHandleReap(root, &completion) != r4os.abi.program_handle_ok or completion.exit_code != 0) return false;
+    root.* = .{};
+    var tick: u32 = 0;
+    while (tick < 3000) : (tick += 1) {
+        var changed = false;
+        const after = captureRuntimeBaselineWithChange(ctx, &changed) orelse {
+            if (!changed) return false;
+            ctx.sys.sleepTicks(1);
+            continue;
+        };
+        const after_registry = readProgramRegistry(ctx) orelse return false;
+        if (sameLifecycleOwnership(before, after, registry, after_registry)) {
+            ctx.sys.println("SPECTRA LIFECYCLE programlifecycle console-tree warm depth=4 close=OK ownership=baseline");
+            return true;
+        }
+        ctx.sys.sleepTicks(1);
     }
     return false;
 }
@@ -1837,9 +1911,24 @@ fn waitLifecycleTreeLive(
     return false;
 }
 
-fn testLifecycleServices(ctx: *DiagApi) bool {
-    const baseline = captureRuntimeBaseline(ctx) orelse return programLifecycleFail(ctx, "service baseline unavailable");
-    const registry = readProgramRegistry(ctx) orelse return programLifecycleFail(ctx, "service registry unavailable");
+// Public passive owner evidence, only in this explicitly requested check.
+fn serviceCallerStack(ctx: *DiagApi) ?r4os.abi.ProgramMemoryBlockInfo {
+    const bundle = ctx.sys.base.bundle orelse return null;
+    const owner = bundle.raw.instance_id;
+    if (owner == 0) return null;
+    const count = ctx.dev.memoryBlockCount();
+    for (0..count) |i| {
+        const block = ctx.dev.memoryBlock(@intCast(i)) orelse return null;
+        if (block.kind == r4os.abi.memory_kind_app_stack and
+            block.owner == r4os.abi.memory_owner_r4x_instance and
+            block.owner_id == owner and block.virt_len != 0) return block;
+    }
+    return null;
+}
+
+// Reuse the same real call-frame shape for warm and measured passes. Ranked
+// owner headroom and64KB R4X stack growth belong to this live caller until exit.
+noinline fn serviceLifecycleCalls(ctx: *DiagApi) bool {
     var info: r4os.abi.ServiceInfo = .{};
 
     if (ctx.sys.serviceStart("SVCEXIT0", &info) != r4os.abi.service_api_result_ok or
@@ -1858,8 +1947,33 @@ fn testLifecycleServices(ctx: *DiagApi) bool {
         !waitLifecycleServiceExit(ctx, "SVCEXIT37", 37, 4000, &info) or info.restart_count <= exit37_restarts)
         return programLifecycleFail(ctx, "service exit 37 restart failed");
 
-    if (!waitLifecycleBaseline(ctx, baseline, registry, 5000))
+    return true;
+}
+
+fn warmLifecycleServices(ctx: *DiagApi) bool {
+    const stack_before = serviceCallerStack(ctx) orelse return programLifecycleFail(ctx, "service caller stack unavailable");
+    if (!serviceLifecycleCalls(ctx)) return false;
+    const stack_after = serviceCallerStack(ctx) orelse return programLifecycleFail(ctx, "service caller stack unavailable after warm");
+    if (stack_after.id != stack_before.id or stack_after.owner_id != stack_before.owner_id or
+        stack_after.virt_base != stack_before.virt_base or stack_after.virt_len != stack_before.virt_len)
+        return programLifecycleFail(ctx, "service caller stack identity changed");
+    ctx.sys.write("SPECTRA LIFECYCLE programlifecycle service warm caller=");
+    ctx.sys.printU64(stack_after.owner_id);
+    ctx.sys.write(" stack=");ctx.sys.printU64(stack_after.id);
+    ctx.sys.write(" committed=");ctx.sys.printU64(stack_before.committed_bytes);
+    ctx.sys.write("/");ctx.sys.printU64(stack_after.committed_bytes);
+    ctx.sys.println(" exit0=OK exit37=OK restarts=OK");
+    return true;
+}
+
+fn testLifecycleServices(ctx: *DiagApi) bool {
+    const baseline = captureRuntimeBaseline(ctx) orelse return programLifecycleFail(ctx, "service baseline unavailable");
+    const registry = readProgramRegistry(ctx) orelse return programLifecycleFail(ctx, "service registry unavailable");
+    if (!serviceLifecycleCalls(ctx)) return false;
+    if (!waitLifecycleBaseline(ctx, baseline, registry, 5000)) {
+        printLifecycleBaselineMismatch(ctx, baseline, registry);
         return programLifecycleFail(ctx, "service baseline not restored");
+    }
     ctx.sys.println("SPECTRA LIFECYCLE programlifecycle services exit0=OK exit37=OK restarts=OK baseline=OK");
     return true;
 }
@@ -2070,18 +2184,13 @@ fn waitLifecycleRegistryBaseline(
     return false;
 }
 
-fn waitLifecycleBaseline(
-    ctx: *DiagApi,
+fn sameLifecycleOwnership(
     baseline: RuntimeBaseline,
+    current: RuntimeBaseline,
     registry: r4os.abi.ProgramRegistrySummaryV2,
-    max_ticks: u32,
+    current_registry: r4os.abi.ProgramRegistrySummaryV2,
 ) bool {
-    var tick: u32 = 0;
-    while (tick < max_ticks) : (tick += 1) {
-        const current = captureRuntimeBaseline(ctx) orelse return false;
-        const current_registry = readProgramRegistry(ctx) orelse return false;
-        if (sameTotals(baseline.resources, current.resources) and
-            sameMemoryStable(baseline.memory, current.memory) and
+    return sameTotals(baseline.resources, current.resources) and
             sameLifecycleStorageCurrent(baseline.storage, current.storage) and
             baseline.instance_count == current.instance_count and
             current_registry.reserved_slots == registry.reserved_slots and
@@ -2091,7 +2200,29 @@ fn waitLifecycleBaseline(
             current_registry.completion_pending == registry.completion_pending and
             current_registry.completion_ready == registry.completion_ready and
             current_registry.completion_output_bytes == registry.completion_output_bytes and
-            current_registry.retire_queued == registry.retire_queued)
+            current_registry.retire_queued == registry.retire_queued;
+}
+
+fn waitLifecycleBaseline(
+    ctx: *DiagApi,
+    baseline: RuntimeBaseline,
+    registry: r4os.abi.ProgramRegistrySummaryV2,
+    max_ticks: u32,
+) bool {
+    var tick: u32 = 0;
+    while (tick < max_ticks) : (tick += 1) {
+        var changed = false;
+        const current = captureRuntimeBaselineWithChange(ctx, &changed) orelse {
+            // A partially collected instance inventory cannot be compared.
+            // Retry only that real transition inside the ORIGINAL budget;
+            // missing APIs and invalid memory/storage still fail immediately.
+            if (!changed) return false;
+            ctx.sys.sleepTicks(1);
+            continue;
+        };
+        const current_registry = readProgramRegistry(ctx) orelse return false;
+        if (sameMemoryStable(baseline.memory, current.memory) and
+            sameLifecycleOwnership(baseline, current, registry, current_registry))
             return true;
         ctx.sys.sleepTicks(1);
     }
@@ -4558,6 +4689,11 @@ fn resourceBaselineRestored(ctx: *DiagApi, before: ResourceBaseline) bool {
 }
 
 fn captureRuntimeBaseline(ctx: *DiagApi) ?RuntimeBaseline {
+    return captureRuntimeBaselineWithChange(ctx, null);
+}
+
+fn captureRuntimeBaselineWithChange(ctx: *DiagApi, changed: ?*bool) ?RuntimeBaseline {
+    if (changed) |out_changed| out_changed.* = false;
     const resources = resourceTotals(ctx) orelse {
         ctx.sys.println("SPECTRA LIFECYCLE baseline: resource totals unavailable");
         return null;
@@ -4612,7 +4748,9 @@ fn captureRuntimeBaseline(ctx: *DiagApi) ?RuntimeBaseline {
     var status: r4os.abi.ProgramStatus = .{};
     ctx.dev.programStatus(&status);
     if (storage.active_instances != @as(u32, status.instance_count)) {
-        ctx.sys.println("SPECTRA LIFECYCLE baseline: instance count changed");
+        if (changed) |out_changed| {
+            out_changed.* = true;
+        } else ctx.sys.println("SPECTRA LIFECYCLE baseline: instance count changed");
         return null;
     }
     return .{

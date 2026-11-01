@@ -246,3 +246,106 @@ rewritten. All STANDARD workloads, amounts and scoring contracts are unchanged.
 The generic SUMMARY export also represents each retired duration as
 value:null with unavailable:retired in JSON, independent of detail mode.
 Historical measured numbers and unrelated full-width counters stay numeric.
+
+Version0.1.97 keeps the full raw R4AUDIO PCM conformance check through
+actual Close acknowledgement. Only Busy is retried against the same stream
+ID, bounded by 500 ms including Close calls; late ACKs fail the budget check.
+It records the actual logical stream generation (the legacy raw owner is
+KERNEL), accepted bytes, Close result and attempts. Other errors, missing
+identity and timeouts remain failures. Work, zero-loss and retired-duration
+oracles stay active. This CLI-only functional deadline is not a new normal
+PCM duration measurement.
+
+Version0.1.98 preserves the exact declared console payload and intentional exit
+code of plain `CHECK LIFECYCLE /LIFECYCLEEXIT code bytes` child fixtures. It does
+not append a check-result frame to those bytes. The original exact completion
+length, payload, generation and retention assertions remain active. Invalid
+fixture arguments and unexpected returns retain their result frame; ordinary
+checks and explicit JSON/export presentation also retain it. The existing
+successful plain COMPUTEHOLD no-frame contract is preserved.
+
+The completion ring and its warmup use explicit independent terminal captures,
+as the existing stale-generation fixtures already do. Each child's completion
+still retains its exact raw bytes for CompletionRead until Reap; its sealed
+producer blocks are not borrowed by the parent's visible transcript. Global
+storage, memory and process baselines remain exact after actual child Reap.
+
+The nonempty Legacy-ID fixtures also select their own terminal host. Their
+public adapter still enters the same Kernel legacy launch operation1, retaining
+raw legacy IDs, complete64/32-byte output, forced-ID collision and single-use
+Reap checks. Console-tree cases continue to exercise genuine inherited hosts.
+
+Version0.1.99 retries a genuinely changed instance-count snapshot inside the
+existing lifecycle baseline wait budget. Partial snapshots never satisfy the
+baseline. Invalid memory/storage and missing API failures remain immediate;
+every original resource/memory/storage equality is preserved. The separate
+first-window cold memory delta still requires owner attribution.
+
+The complete lifecycle profile warms one actual depth4 terminal-window tree
+before capturing its measured memory baseline. Twenty-four immediate exits do
+not establish that simultaneous live Task shape. Exact cold inventories map
+the first-tree growth to three cached64KB Task stacks (80KB guarded virtual
+spans) and eleven resident page-table pages. Warmup still requires real Close,
+Wait/Reap and exact process/resource/storage ownership return; every measured
+Close/Kill and final baseline retains the original exact memory equality.
+
+Version0.1.100 allows `CHECK LIFECYCLE /SERVICELIFECYCLE` to select the
+unchanged existing ServiceExit0/37 and restart case. It needs the manual
+SVCEXIT0/37 fixtures from the canonical Test configuration. Baseline failure
+now prints the same complete ownership/memory/storage diagnostic as other
+lifecycle cases; original service and exact baseline assertions stay intact.
+
+Version0.1.101 warms the same real ServiceExit0/37 start/restart call-frame shape
+in the current caller before taking its measured baseline. The check binds the
+actual public R4X app-stack block and owner, then preserves every original
+measured service/code/restart/registry/resource/storage/memory assertion. Kernel
+ranked-owner stack headroom and64KB R4X stack commit remain functional. Retained
+service terminal evidence is preserved; cold and separate-invocation failures
+remain available for comparison. This is an explicit diagnostic precondition.
+
+Version0.1.102 exposes the existing full asynchronous lifecycle case through
+`CHECK LIFECYCLE /ASYNCLIFECYCLE`. Like /PROGRAMLIFECYCLE, this requires a real
+fresh queue-backed SVCSTALL (`/HOLD /STALLENDPOINT`), with requests/responses0;
+/ASYNCQUICK installs and removes its own fixture. Keep these setup contracts
+separate. On the original first-cycle cold/warm failure, the existing baseline
+formatter now prints the already captured resource/storage/memory values. No
+extra measured query, oracle,72-cycle count or runtime warm policy was changed.
+
+Version0.1.103 gives each actual async/thread kill fixture its own terminal-mode
+console capture. Its worker/start/request output is preserved. Inherited
+producer transcripts intentionally survive through their parent; native102
+showed exactly one retained output payload (+16,424 current console bytes),
+with unchanged resource totals and instance count after actual child Reap.
+Each original Kill/Wait/three-thread/request/endpoint/owner/baseline assertion
+and all72 measured cycles remain intact. No Kernel console-retention, service,
+thread or I/O runtime behavior was changed; normal native103 qualification is
+pending until its exact artifact has been checked.
+
+Version0.1.104 reports the original global PROGRAMLIFECYCLE baseline through
+its existing detailed failure formatter when final quiescence is missing.
+Native103 already passes all72 measured async cycles with the original strict
+memory/storage/resource/thread/request/endpoint assertions; its later global
+failure remains an independent open finding. No baseline, warm policy, timeout,
+Kernel behavior or cycle count was changed by this diagnostic-only increment.
+
+Version0.1.105 moves the existing real ServiceExit0/37 warm calls ahead of the
+original global PROGRAMLIFECYCLE baseline. The measured service phase and
+standalone /SERVICELIFECYCLE retain the same warm/measured call counts. Native104
+proved all local checks/72cycles and exact global registry/resource/storage
+return, but one4KB Kernel-owned empty page table remained. Public memory block
+9165 and read-only hardware-root traversal identify its APP_STACK span
+0xffffff4006400000..0xffffff4006600000; the existing paging owner deliberately
+retains empty intermediate tables after real leaf unmap/TLB acknowledgement.
+The service warm phase previously occurred after the global baseline; the
+same real calls now prepare that capacity before measuring it. The standalone
+service path still warms its own caller. No page-table deletion, generic memory
+tolerance, baseline substitution, extra warm service calls, timeout or72-cycle
+change was introduced. Final cold native105 qualification remains pending.
+
+Native105 qualification: fresh normalKernel449/canonicalSpectra105 KVM4 passes
+all original PROGRAMLIFECYCLE cases,72 strict three-thread/blocked-I/O/cancel
+cycles and the ORIGINAL final global owner/heap/PMM/VM/storage baseline. The
+changed standalone service warm/measured entry also passes with a new caller
+and actual64KB owned stack growth. Earlier red originals remain archived;
+all_native_attempts_pass=false, required_scope_pass=true. Documentation and
+formal release/benchmark/push completion are tracked separately in the roadmap.

@@ -4659,14 +4659,50 @@ const App = struct {
             return false;
         }
         const stream_id: u32 = @intCast(stream);
+        // The raw API uses Owner::KERNEL. Capture the real logical stream
+        // generation; the Close loop keeps this original ID and never reopens.
+        const budget = @max(self.sys.ticksFromMilliseconds(500), 1);
+        var identity: r4os.abi.AudioStreamProgress = .{};
+        const identity_deadline = self.sys.ticks() +| budget;
+        var identity_rc = self.audio.audioStreamProgress(stream_id, 0, &identity);
+        while (identity_rc == r4os.abi.service_api_result_busy and self.sys.ticks() < identity_deadline) {
+            self.sys.sleepTicks(1);
+            if (self.sys.ticks() >= identity_deadline) break;
+            identity_rc = self.audio.audioStreamProgress(stream_id, 0, &identity);
+        }
+        const identity_ok = identity_rc == 0 and identity.stream_id == stream_id and identity.stream_generation != 0;
         const written = self.audio.audioWrite(stream_id, pcm[0..]);
-        const closed = self.audio.audioClose(stream_id);
+        const close_deadline = self.sys.ticks() +| budget;
+        var close_attempts: u32 = 1;
+        var closed = self.audio.audioClose(stream_id);
+        while (closed == r4os.abi.service_api_result_busy and self.sys.ticks() < close_deadline) {
+            self.sys.sleepTicks(1);
+            if (self.sys.ticks() >= close_deadline) break;
+            closed = self.audio.audioClose(stream_id);
+            close_attempts += 1;
+        }
+        const close_in_budget = self.sys.ticks() <= close_deadline;
+        self.sys.print("  audio receipt stream=");
+        self.sys.printU64(stream_id);
+        self.sys.print(" generation=");
+        self.sys.printU64(identity.stream_generation);
+        self.sys.print(" identity=");
+        self.sys.printI32(identity_rc);
+        self.sys.print(" write=");
+        self.sys.printI32(written);
+        self.sys.print(" close=");
+        self.sys.printI32(closed);
+        self.sys.print(" attempts=");
+        self.sys.printU64(close_attempts);
+        self.sys.print(" within500ms=");
+        self.sys.printU64(@intFromBool(close_in_budget));
+        self.sys.println("");
         const after = self.captureSummary() orelse {
             self.printCheck("Audio write conformance", false);
             return false;
         };
-        const ok = audioDurationsUnavailable(after) and written == @as(i32, @intCast(pcm.len)) and
-            closed == 0 and
+        const ok = audioDurationsUnavailable(after) and identity_ok and written == @as(i32, @intCast(pcm.len)) and
+            closed == 0 and close_in_budget and
             after.audio_stream_writes > before.audio_stream_writes and
             after.audio_stream_high_water_bytes >= before.audio_stream_high_water_bytes and
             after.audio_stream_dropped_bytes == before.audio_stream_dropped_bytes;

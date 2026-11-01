@@ -48,6 +48,7 @@ pub const Controller = struct {
     windows: [2]Window = .{Window{}} ** 2,
     window_completion_handles: [2]r.abi.ProgramProcessHandle = .{r.abi.ProgramProcessHandle{}} ** 2,
     window_completion_exit_codes: [2]i32 = .{0} ** 2,
+    window_completion_receipts: [2]r.abi.ProgramProcessCompletion = .{r.abi.ProgramProcessCompletion{}} ** 2,
     failed: bool = false,
     failure_owner_attempted: bool = false,
     render_stats: struct { redraws: u64 = 0, present_lost_frames: u64 = 0, present_failures: u64 = 0 } = .{},
@@ -132,6 +133,9 @@ pub const Controller = struct {
             return;
         };
         self.windows[index] = .{};
+        self.window_completion_handles[index] = .{};
+        self.window_completion_exit_codes[index] = 0;
+        self.window_completion_receipts[index] = .{};
         self.next_snapshot_tick[index] = 0;
         if (self.ctx.sys.programSpawnHandle(path, args, policy, &self.check.handles[index]) != 0) {
             self.failed = true;
@@ -179,6 +183,7 @@ pub const Controller = struct {
                     }
                     self.window_completion_handles[index] = handle;
                     self.window_completion_exit_codes[index] = code;
+                    self.window_completion_receipts[index] = done;
                     self.check.handles[index] = .{};
                     self.check.out.record("completion", "SUBSYSTEM", index, .{ .handle = handle, .sequence = sequence, .exit_code = code, .reaped = true });
                     continue;
@@ -234,14 +239,39 @@ pub const Controller = struct {
         return self.ctx.sys.programHandleStatus(&handle, &info) == 0 and
             info.state == @intFromEnum(r.abi.ProgramInstanceState.done);
     }
+    fn successfulEnd(self: *Controller, index: usize, handle: r.abi.ProgramProcessHandle) ?r.abi.ProgramProcessCompletion {
+        var expected = handle;
+        var done: r.abi.ProgramProcessCompletion = .{};
+        if (handle.instance_id == 0) {
+            // Only a receipt actually saved by this parent's successful Reap
+            // can stand for its now-cleared slot; an empty slot proves nothing.
+            expected = self.window_completion_handles[index];
+            done = self.window_completion_receipts[index];
+        } else if (self.ctx.sys.programHandleWait(&handle, 0, &done) != 0) return null;
+        if (expected.instance_id == 0 or expected.generation == 0 or !same(done.handle, expected) or
+            done.sequence == 0 or done.flags & r.abi.program_completion_flag_ready == 0 or
+            done.exit_code != 0 or (done.exit_reason != r.abi.program_exit_reason_natural and
+            done.exit_reason != r.abi.program_exit_reason_close)) return null;
+        return done;
+    }
     fn windowAction(self: *Controller, index: usize, op: wire.Op) void {
         const handle = self.check.handles[index];
-        // The original fire-and-forget UI actions ignore an already ended
-        // window. Fast KVM fixtures can really finish during the prior pump.
-        if (self.ended(handle)) return;
+        // An optional scene action has no target after exact successful
+        // completion. Its work/PCM/input/report/reap oracles remain separate.
+        if (self.successfulEnd(index, handle) != null) return;
+        const started = self.ctx.ticks();
         _ = self.check.call(op, identity(handle), 0, 0) catch |err| {
-            if (err == error.NotFound and self.ended(handle)) return;
-            self.check.out.record("transport-failure", "SUBSYSTEM", index, .{ .operation = op, .reason = @errorName(err), .handle = handle });
+            const observed = self.ctx.ticks();
+            // A timeout can race the same terminal edge as NotFound. Do not
+            // count this as a WM acknowledgement or forgive identity/protocol,
+            // failed-child or connection-retirement errors.
+            if (err == error.NotFound or err == error.DesktopTimeout) {
+                if (self.successfulEnd(index, handle)) |done| {
+                    self.check.out.record("optional-window-ended", "SUBSYSTEM", index, .{ .operation = op, .reason = @errorName(err), .handle = handle, .started_tick = started, .observed_tick = observed, .completion = done, .wm_acknowledged = false });
+                    return;
+                }
+            }
+            self.check.out.record("transport-failure", "SUBSYSTEM", index, .{ .operation = op, .reason = @errorName(err), .handle = handle, .started_tick = started, .observed_tick = observed });
             self.failed = true;
         };
     }

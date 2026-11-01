@@ -193,10 +193,11 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     }
     if (@atomicLoad(u8, &write_failed, .acquire) != 0) out.failed = true;
     if (line_length != 0) out.message("check", line[0..line_length], false);
-    // A successful private hold fixture must not leave a new sealed producer
-    // block borrowed by its parent's visible transcript after process Reap.
-    // Failures and every ordinary public check retain their result record.
-    if (!(result == 0 and cli.same(group, "LIFECYCLE") and cli.same(args, "/COMPUTEHOLD")))
+    // Plain private fixtures own their declared console payload, including an
+    // intentional nonzero exit. Normal checks, explicit JSON/export and actual
+    // failures retain the ordinary result record.
+    const fixture = if (request.command == .check) @import("route.zig").fixtureOutput(group, args) else .framed;
+    if (out.failed or out.format != .text or out.path != null or fixture.needsResult(result))
         out.record("result", group, 0, .{ .exit_code = result, .success = result == 0 });
     return result;
 }
