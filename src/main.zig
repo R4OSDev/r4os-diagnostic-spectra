@@ -24,6 +24,8 @@ pub fn r4_app_main(app: *r4os.App) i32 {
         return 2;
     };
     if (!worker and request.command == .bench and cli.same(request.group(), "STANDARD")) return launcher.launch(app, &request);
+    if (!worker and request.command == .bench and cli.same(request.group(), "UPLOAD"))
+        return @import("standard_upload.zig").upload(app, request.run_path[0..request.run_len :0], null);
     output = Output.init(app, &request);
     if (output.failed) {
         app.system().println("SPECTRA: export could not be opened");
@@ -41,6 +43,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "  CHECK BOOT|PERFORMANCE|WORK|THREAD|SMP|STACK|SIMD|LIFECYCLE|ASYNC_IO|MEMORY|FILESYSTEM|NTFS|LOADER|RESOURCES|INPUT|NETWORK|IPC|VM|STORAGE|TCP|USB [options]\r\n" ++
             "  CHECK SMP [/ADMISSION|/LIFECYCLE|/POWER|/FEATURES|/FEATURES-OFFLINE:n|/MCA|/MICROCODE|/PMU|/ACCEL|/ENTROPY|/ENTROPY-NONE]\r\n" ++
             "  CHECK TEXT /CODECS (strict imported legacy/UTF-8 and exact document bytes)\r\n" ++
+            "  CHECK HOSTID (validated firmware benchmark identity; no raw UUID)\r\n" ++
             "  CHECK DESKTOP [/HOST] [/RESTART] [/AUDIO] [/CAPTURE] [/REPLAY] (/REPLAY requires a native GR owner)\r\n" ++
             "  CHECK DESKTOP /OWNER (one copied owner report; no scene work, capture or restart)\r\n" ++
             "  CHECK SUBSYSTEM [/HOST] [/SNES] (isolated Test fixtures; /SNES selects only that original pair)\r\n" ++
@@ -63,7 +66,8 @@ pub fn r4_app_main(app: *r4os.App) i32 {
             "    [/CHECK] [/OUTPUT-ANALYSIS] [/OWN-DESKTOP] (isolated Desktop required)\r\n" ++
             "    /OWN-DESKTOP explicitly starts/closes only a new private host; no implicit poweroff.\r\n" ++
             "  BENCH STANDARD [/AREA:scheduler_sync|memory|ipc|lifecycle|filesystem_io]\r\n" ++
-            "    [/BASELINE | /REFERENCE:path /COMPAREKEY:method] [/SETTLE:0..5000]\r\n" ++
+            "    [/BASELINE | /REFERENCE:path /COMPAREKEY:method] [/SETTLE:0..5000] [/UPLOAD]\r\n" ++
+            "  BENCH UPLOAD /RUN:C:\\R4OS\\DATA\\BENCHMARKS\\<run-id>\\RUN.JSON /UPLOAD (retry saved run)\r\n" ++
             "  /JSON writes versioned NDJSON; /EXPORT:path explicitly writes a file.\r\n" ++
             "  METRICS/LOGS: /WATCH:1..60 /INTERVAL:100..60000 (waiting totals at most 60 s).\r\n" ++
             "  Exit: 0 success, 1 failed/incomplete, 2 arguments, 3 output, 4 cancelled.\r\n" ++

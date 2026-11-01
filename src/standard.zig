@@ -163,5 +163,20 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     }
     if (sys.programShouldClose()) exit_code = 4;
     presentation.render(out, &samples, &metrics, reference, config, exit_code, beginning, cpu_count);
+    // The foreground launcher needs the exact 43 machine records even when
+    // the user requested the established human-readable presentation.
+    if (request.export_len != 0 and out.format == .text) {
+        var machine_request = request.*;
+        if (request.export_len + ".RAW".len >= machine_request.export_path.len) return 3;
+        @memcpy(machine_request.export_path[request.export_len..][0..4], ".RAW");
+        machine_request.export_len += 4;
+        machine_request.export_path[machine_request.export_len] = 0;
+        machine_request.format = .json;
+        var machine = Output.init(app, &machine_request);
+        if (machine.failed) return 3;
+        machine.detail = out.detail;
+        presentation.render(&machine, &samples, &metrics, reference, config, exit_code, beginning, cpu_count);
+        if (!machine.finish()) return 3;
+    }
     return exit_code;
 }

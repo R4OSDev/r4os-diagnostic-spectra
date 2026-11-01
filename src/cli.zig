@@ -12,11 +12,18 @@ pub const Request = struct {
     args_len: usize = 0,
     export_path: [260:0]u8 = .{0} ** 260,
     export_len: usize = 0,
+    upload: bool = false,
+    run_path: [260:0]u8 = .{0} ** 260,
+    run_len: usize = 0,
     count: u32 = 1,
     interval_ms: u32 = 1000,
 
-    pub fn group(self: *const Request) []const u8 { return self.group_bytes[0..self.group_len]; }
-    pub fn args(self: *const Request) [:0]const u8 { return self.args_bytes[0..self.args_len :0]; }
+    pub fn group(self: *const Request) []const u8 {
+        return self.group_bytes[0..self.group_len];
+    }
+    pub fn args(self: *const Request) [:0]const u8 {
+        return self.args_bytes[0..self.args_len :0];
+    }
 };
 
 pub const Tokens = struct {
@@ -38,7 +45,9 @@ pub const Tokens = struct {
     }
 };
 
-pub fn same(a: []const u8, b: []const u8) bool { return std.ascii.eqlIgnoreCase(a, b); }
+pub fn same(a: []const u8, b: []const u8) bool {
+    return std.ascii.eqlIgnoreCase(a, b);
+}
 
 fn option(value: []const u8, prefix: []const u8) ?[]const u8 {
     if (value.len < prefix.len or !same(value[0..prefix.len], prefix)) return null;
@@ -72,11 +81,18 @@ pub fn parse(input: []const u8) Error!Request {
     while (try tokens.next()) |token| {
         if (same(token, "/JSON") or same(token, "--json")) {
             request.format = .json;
+        } else if (same(token, "/UPLOAD")) {
+            if (request.upload) return error.InvalidOption;
+            request.upload = true;
         } else if (option(token, "/EXPORT:")) |raw| {
             const path = if (raw.len >= 2 and raw[0] == '"' and raw[raw.len - 1] == '"') raw[1 .. raw.len - 1] else raw;
             if (path.len == 0 or path.len >= request.export_path.len or request.export_len != 0) return error.InvalidOption;
             @memcpy(request.export_path[0..path.len], path);
             request.export_len = path.len;
+        } else if (option(token, "/RUN:")) |raw| {
+            if (raw.len == 0 or raw.len >= request.run_path.len or request.run_len != 0) return error.InvalidOption;
+            @memcpy(request.run_path[0..raw.len], raw);
+            request.run_len = raw.len;
         } else if (option(token, "/WATCH:")) |value| {
             if (count_seen) return error.InvalidOption;
             count_seen = true;
@@ -91,12 +107,19 @@ pub fn parse(input: []const u8) Error!Request {
             if (request.command != .check and request.command != .bench) return error.InvalidOption;
             const separator: usize = if (request.args_len == 0) 0 else 1;
             if (request.args_len + separator + token.len > request.args_bytes.len) return error.TooLong;
-            if (separator != 0) { request.args_bytes[request.args_len] = ' '; request.args_len += 1; }
+            if (separator != 0) {
+                request.args_bytes[request.args_len] = ' ';
+                request.args_len += 1;
+            }
             @memcpy(request.args_bytes[request.args_len..][0..token.len], token);
             request.args_len += token.len;
         }
     }
     if ((count_seen or interval_seen) and request.command != .metrics and request.command != .logs) return error.InvalidOption;
+    if (request.upload and (request.command != .bench or !(same(request.group(), "STANDARD") or same(request.group(), "UPLOAD")))) return error.InvalidOption;
+    if (request.command == .bench and same(request.group(), "UPLOAD")) {
+        if (request.run_len == 0 or request.args_len != 0 or !request.upload or request.export_len != 0 or request.format != .text) return error.InvalidOption;
+    } else if (request.run_len != 0) return error.InvalidOption;
     if (interval_seen and !count_seen) return error.InvalidOption;
     if (@as(u64, request.count - 1) * request.interval_ms > 60_000) return error.InvalidOption;
     if (request.group_len == 0) {
@@ -114,6 +137,16 @@ test "empty invocation is passive and explicit benchmark retains bounded argumen
     try std.testing.expectEqual(Format.json, request.format);
     try std.testing.expectEqualStrings("CLOCK", request.group());
     try std.testing.expectEqualStrings("/REPEAT:5 /WARM", request.args());
+    const upload = try parse("bench standard /UPLOAD /JSON");
+    try std.testing.expect(upload.upload);
+    try std.testing.expectEqualStrings("", upload.args());
+    try std.testing.expectError(error.InvalidOption, parse("bench standard /UPLOAD /UPLOAD"));
+    try std.testing.expectError(error.InvalidOption, parse("bench clock /UPLOAD"));
+    const retry = try parse("BENCH UPLOAD /RUN:C:\\R4OS\\DATA\\BENCHMARKS\\123e4567-e89b-42d3-a456-426614174000\\RUN.JSON /UPLOAD");
+    try std.testing.expectEqualStrings("UPLOAD", retry.group());
+    try std.testing.expect(retry.run_len > 0);
+    try std.testing.expectError(error.InvalidOption, parse("BENCH UPLOAD"));
+    try std.testing.expectError(error.InvalidOption, parse("BENCH STANDARD /RUN:C:\\RUN.JSON"));
 }
 
 test "watch requests are finite and restricted to passive commands" {

@@ -1,6 +1,9 @@
 const std = @import("std");
 const cli = @import("cli.zig");
 const model = @import("standard_model.zig");
+const default_key = "962ef07e9b752294bf76297993199651e0dd3acbe61311505fc60497e855520b";
+const frozen_reference = @embedFile("standard_reference_original.json");
+const frozen_reference_sha256 = "dbc69c15f01c54f3abca36f0b11db2070a4a26fd0b0bfca5490716137a744d2d";
 pub const Config = struct {
     area: ?usize = null,
     self_reference: bool = false,
@@ -49,6 +52,10 @@ pub fn parseOptions(args: []const u8) !Config {
     }
     if (config.self_reference and (config.area != null or config.path[0] != 0 or config.key_len != 0)) return error.InvalidOption;
     if ((config.path[0] != 0) != (config.key_len != 0)) return error.InvalidOption;
+    if (!config.self_reference and config.path[0] == 0 and config.key_len == 0) {
+        @memcpy(config.key[0..default_key.len], default_key);
+        config.key_len = default_key.len;
+    }
     return config;
 }
 const Value = std.json.Value;
@@ -125,7 +132,17 @@ pub fn readReference(root: Value, config: Config, detail: bool) Reference {
 }
 var file_bytes: [256 * 1024]u8 = undefined;
 pub fn load(app: anytype, config: Config, detail: ?bool) Reference {
-    if (config.path[0] == 0) return .{};
+    if (config.path[0] == 0) {
+        if (config.self_reference) return .{};
+        var digest: [32]u8 = undefined;
+        std.crypto.hash.sha2.Sha256.hash(frozen_reference, &digest, .{});
+        const digest_hex = std.fmt.bytesToHex(digest, .lower);
+        if (!std.mem.eql(u8, &digest_hex, frozen_reference_sha256))
+            return .{ .reason = "frozen-reference-hash-mismatch" };
+        const parsed = std.json.parseFromSlice(Value, app.system().allocator(), frozen_reference, .{ .allocate = .alloc_always }) catch return .{ .reason = "frozen-reference-invalid" };
+        defer parsed.deinit();
+        return readReference(parsed.value, config, detail orelse return .{ .reason = "instrumentation-mode-unavailable" });
+    }
     const sys = app.system();
     const info = sys.fileInfo(&config.path) orelse return .{ .reason = "reference-file-missing" };
     if (info.size == 0 or info.size > file_bytes.len) return .{ .reason = "reference-file-size-invalid" };
@@ -154,4 +171,14 @@ test "reference parser requires the complete compatible five-area contract" {
     try std.testing.expect(readReference(parsed.value, try parseOptions("/REFERENCE:C:\\REF.JSON /COMPAREKEY:other"), false).reason != null);
     parsed.value.object.getPtr("metrics").?.array.items[0].object.getPtr("median_value").?.* = .{ .string = "0" };
     try std.testing.expect(readReference(parsed.value, config, false).reason != null);
+}
+
+test "frozen Suite 3 reference matches the default guest comparison key" {
+    const config = try parseOptions("");
+    try std.testing.expectEqualStrings(default_key, config.key[0..config.key_len]);
+    const parsed = try std.json.parseFromSlice(Value, std.testing.allocator, frozen_reference, .{});
+    defer parsed.deinit();
+    const reference = readReference(parsed.value, config, false);
+    try std.testing.expect(reference.reason == null);
+    try std.testing.expectEqualStrings("28b326e2-4323-4a4c-a0d2-4c1bab4958c0", &reference.run_id);
 }

@@ -4,7 +4,7 @@ const std = @import("std");
 const r4os = @import("r4os");
 const a = r4os.abi;
 const model = @import("standard_model.zig");
-const child_path = "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\SPECTRA\\STDCHILD.R4X";
+pub const child_path = "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\SPECTRA\\STDCHILD.R4X";
 pub const Error = error{ Cancelled, Timeout, MissingApi, WorkFailed, CleanupFailed };
 
 pub fn clock(sys: *const r4os.r4sys.Context) ?a.MonotonicClockInfo {

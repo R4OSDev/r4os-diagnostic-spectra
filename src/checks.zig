@@ -98,6 +98,7 @@ pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
     const group = request.group();
     var args_buffer: [1024:0]u8 = undefined;
     var args = request.args();
+    if (request.command == .check and cli.same(group, "HOSTID")) return @import("standard_identity.zig").check(app, args, out);
     if (request.command == .check and cli.same(group, "DESKTOP")) return @import("desktop_check.zig").run(app, args, out);
     if (request.command == .check and cli.same(group, "SUBSYSTEM")) return @import("subsystem_check.zig").run(app, args, out);
     if (request.command == .check and cli.same(group, "REMOTEFRAME")) return @import("remote_frame_check.zig").run(app, args, out);
