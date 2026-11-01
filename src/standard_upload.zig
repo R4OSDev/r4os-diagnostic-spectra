@@ -4,6 +4,7 @@ const std = @import("std");
 const r4os = @import("r4os");
 const identity_api = @import("standard_identity.zig");
 const readback_api = @import("standard_readback.zig");
+const scoring_api = @import("standard_server_scoring.zig");
 const Value = std.json.Value;
 const max_run_bytes = 256 * 1024;
 const timeout_ns = 90_000_000_000;
@@ -191,7 +192,8 @@ fn run(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8, phase: *[]
     const run_url = try url(&run_url_buf, target.target_ip, target.port, "benchmark-runs", id);
     var put_body: [8192]u8 = undefined;
     const put = try putRun(allocator, &web, &sys, run_url, headers, path, local.bytes.len, &put_body);
-    if (!isTrue(put, "stored") or !same(put, "run_id", id) or field(put, "score_validation") == null) return error.PutMismatch;
+    if (!isTrue(put, "stored") or !same(put, "run_id", id) or field(put, "score_validation") == null or
+        (scoring_api.applicable(local.doc) and field(put, "server_scoring") == null)) return error.PutMismatch;
 
     phase.* = "GET";
     // fetch keeps the complete wire response in raw_response as well as the
@@ -230,13 +232,25 @@ fn run(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8, phase: *[]
     const validation = field(stored.value, "score_validation") orelse return error.ReadbackMismatch;
     const score_status = string(validation, "status") orelse return error.ReadbackMismatch;
     const put_validation = field(put, "score_validation") orelse return error.PutMismatch;
-    if (!same(put_validation, "status", score_status)) return error.ReadbackMismatch;
-    sys.write("SPECTRA STANDARD upload confirmed: ");
-    sys.println(id);
+    if (string(put_validation, "status") == null) return error.PutMismatch;
     sys.write("SPECTRA STANDARD score validation: ");
     sys.println(score_status);
-    if (std.mem.eql(u8, score_status, "invalid") or std.mem.eql(u8, score_status, "pending"))
-        return error.ServerScoreNotValid;
+    if (scoring_api.applicable(local.doc)) {
+        const submitted = try scoring_api.verify(local.doc, put);
+        const confirmed = try scoring_api.verify(local.doc, stored.value);
+        if (!submitted.matches(confirmed)) return error.ServerScoringChanged;
+        sys.println("SPECTRA STANDARD server scoring: valid");
+        sys.write("SPECTRA STANDARD server baseline: ");
+        sys.println(confirmed.baseline_id);
+        sys.write("SPECTRA STANDARD server overall: ");
+        sys.println(confirmed.overall());
+    } else {
+        if (!same(put_validation, "status", score_status)) return error.ReadbackMismatch;
+        if (std.mem.eql(u8, score_status, "invalid") or std.mem.eql(u8, score_status, "pending"))
+            return error.ServerScoreNotValid;
+    }
+    sys.write("SPECTRA STANDARD upload confirmed: ");
+    sys.println(id);
 }
 
 pub fn upload(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8) i32 {
