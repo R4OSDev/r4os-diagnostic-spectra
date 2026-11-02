@@ -2211,7 +2211,7 @@ const App = struct {
             summary.task_max_count >= summary.task_count and
             summary.boot_phase_count > 0 and
             summary.storage_device_count > 0 and
-            summary.service_max_count > 0 and
+            (summary.service_max_count > 0 or self.sys.hasFn("service_inventory_page")) and
             summary.tcp_max_connections > 0 and
             summary.wait_object_waits > 0 and
             summary.wait_object_timeouts > 0 and
