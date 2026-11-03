@@ -146,7 +146,14 @@ fn run(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8, phase: *[]
         const code = std.enums.fromInt(r4os.server_access.Code, target.code);
         sys.write("SPECTRA STANDARD registration code: ");
         sys.println(if (code) |known| @tagName(known) else "invalid_target");
-        return error.RegistrationRejected;
+        return switch (code orelse .bad_request) {
+            .credentials, .invalid_secret => error.CredentialsMissing,
+            .profile => error.RegistrationProfile,
+            .target => error.RegistrationTarget,
+            .network, .transport_unavailable, .transport => error.RegistrationTransport,
+            .invalid_reply => error.RegistrationReply,
+            else => error.RegistrationRejected,
+        };
     }
     var bearer = try r4os.server_credentials.load(&sys, .benchmark_bearer);
     defer bearer.clear();
@@ -253,17 +260,33 @@ fn run(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8, phase: *[]
     sys.println(id);
 }
 
-pub fn upload(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8) i32 {
+pub const Report = struct { exit_code: i32 = 0, phase: []const u8 = "preflight", error_name: ?[]const u8 = null };
+
+pub fn validateLocal(app: *r4os.App, path: [:0]const u8, expected_sha: []const u8) !void {
+    const sys = app.system();
+    var arena = std.heap.ArenaAllocator.init(sys.allocator());
+    defer arena.deinit();
+    const local = try loadRun(arena.allocator(), &sys, path, expected_sha);
+    const identity = try identity_api.derive(app);
+    if (!std.mem.eql(u8, string(local.doc, "host_id") orelse return error.InvalidRun, &identity.host_id)) return error.WrongPhysicalHost;
+}
+
+pub fn uploadWithReport(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8) Report {
     var phase: []const u8 = "preflight";
-    run(app, path, expected_sha, &phase) catch |err| {
+    run(app, path, expected_sha, &phase) catch |err| return .{ .exit_code = 1, .phase = phase, .error_name = @errorName(err) };
+    return .{ .phase = phase };
+}
+
+pub fn upload(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8) i32 {
+    const report = uploadWithReport(app, path, expected_sha);
+    if (report.error_name) |reason| {
         const sys = app.system();
         sys.write("SPECTRA STANDARD upload ");
-        sys.write(phase);
+        sys.write(report.phase);
         sys.write(": ");
-        sys.println(@errorName(err));
+        sys.println(reason);
         sys.write("SPECTRA STANDARD local run retained: ");
         sys.println(path);
-        return 1;
-    };
-    return 0;
+    }
+    return report.exit_code;
 }

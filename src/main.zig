@@ -14,6 +14,8 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     const raw = app.args();
     if (std.mem.eql(u8, raw, @import("remote_frame_check.zig").child_argument)) return @import("remote_frame_check.zig").child(app);
     if (std.mem.startsWith(u8, raw, @import("desktop_replay_check.zig").child_argument)) return @import("desktop_replay_check.zig").child(app);
+    if (std.ascii.eqlIgnoreCase(std.mem.trim(u8, raw, " \t\r\n"), "/GUI")) return @import("gui.zig").run(app);
+    if (std.mem.startsWith(u8, raw, @import("gui_jobs.zig").prefix)) return @import("gui_jobs.zig").worker(app, raw);
     const worker = std.mem.startsWith(u8, raw, launcher.prefix);
     var worker_command: [1024]u8 = undefined;
     request = (if (worker) launcher.workerRequest(app, raw, &worker_command) else cli.parse(raw)) catch |err| {
@@ -37,6 +39,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     var result: i32 = 0;
     switch (request.command) {
         .help => output.message("help", "SPECTRA " ++ @import("spectra_version").value ++ " - kernel diagnostics and explicit Desktop state\r\n" ++
+            "  /GUI (explicit Desktop GUI launch; normal terminal/SSH calls stay CLI)\r\n" ++
             "  METRICS ALL|CLOCK|SUMMARY|LOCKS|STACKS|TASKS|SMP|CPUFEATURES|CPUPOWER|MCA|MICROCODE|PMU|ENTROPY|MEMORY|BOOT|IRQ|STORAGE|WORK|IPC|NETWORK|INPUT|PCI|LIFECYCLE\r\n" ++
             "  LOGS BOOT|SERVICE|APPLICATION\r\n" ++
             "  METRICS DESKTOP (passive current WINSVC/Kernel copies; excluded from ALL)\r\n" ++

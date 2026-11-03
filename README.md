@@ -1,6 +1,26 @@
 ﻿# Spectra
 
-Spectra is R4OS's console tool for kernel measurements, kernel logs, functional checks, explicit benchmarks and opt-in passive Desktop state. It runs through Terminal and SSH. A GUI is deferred; command parsing, collectors/checks and rendering are separate.
+Spectra is R4OS's diagnostic tool for kernel measurements, logs, checks and
+explicit benchmarks. Terminal and SSH keep the existing CLI, including help
+on an empty invocation. The Desktop shortcut and Start-menu entry explicitly
+launch the same console-classified `SPECTRA.R4X` with GUI policy and `/GUI`.
+A running Desktop never implicitly changes CLI routing.
+
+The compact GUI offers Standard (default) and its five local `/AREA` tests,
+Start, Upload and status text. Tab/arrows/Enter and mouse input are supported.
+Start never uploads. Upload becomes available only after a complete Standard
+has been atomically saved and read back with its SHA256. It always uses that
+run's original UUID/file/hash; network failures permit an explicit retry.
+Selecting another test or starting a new one clears the permission, keeping
+all previously saved originals. Partial tests cannot upload.
+
+Measurements, export validation and upload run in private same-binary console
+jobs. The GUI uses bounded process handles, generations and nonce-bound typed
+receipts after actual completion/reap. Closing requests cancellation and
+waits for owned-job cleanup. No new system service or Kernel/SDK API is needed.
+Suite3 work, warmup, CPU usage, fixed reference and server readback/scoring
+rules are shared with the CLI. GUI exports identify their actual Desktop
+context; scores are not asserted equal to headless execution.
 
 Version0.1.79 adds `CHECK VM /INVENTORY`, also included in the default VM
 check. It gives the task/thread inventory providers fresh demand-committed

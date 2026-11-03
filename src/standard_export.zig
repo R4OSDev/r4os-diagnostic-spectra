@@ -14,6 +14,8 @@ pub const Result = struct {
     sha256: [64]u8,
 };
 
+pub const Presentation = enum { terminal, desktop_gui };
+
 const Hash = struct { sha256: [64]u8, bytes: u64 };
 
 fn hashFile(sys: *const r4os.r4sys.Context, path: [:0]const u8) !Hash {
@@ -110,6 +112,10 @@ fn publish(sys: *const r4os.r4sys.Context, staged: [:0]const u8, target: [:0]con
 }
 
 pub fn create(app: *r4os.App, records_path: [:0]const u8, started: r4os.abi.TimeState, finished: r4os.abi.TimeState, custom_reference_key: ?[]const u8) !Result {
+    return createWithPresentation(app, records_path, started, finished, custom_reference_key, .terminal);
+}
+
+pub fn createWithPresentation(app: *r4os.App, records_path: [:0]const u8, started: r4os.abi.TimeState, finished: r4os.abi.TimeState, custom_reference_key: ?[]const u8, presentation: Presentation) !Result {
     const sys = app.system();
     const dev = app.devicesLowLevel() orelse return error.HardwareApiUnavailable;
     var arena = std.heap.ArenaAllocator.init(sys.allocator());
@@ -181,7 +187,17 @@ pub fn create(app: *r4os.App, records_path: [:0]const u8, started: r4os.abi.Time
         .repetitions = "5",
         .cpu = .{ .vendor = std.mem.sliceTo(&cpu.vendor_name, 0), .brand = cpu_brand },
     }, .{});
-    const environment = try std.json.parseFromSlice(std.json.Value, a, environment_bytes, .{});
+    var environment = try std.json.parseFromSlice(std.json.Value, a, environment_bytes, .{});
+    if (presentation == .desktop_gui) {
+        const context_bytes = try std.json.Stringify.valueAlloc(a, .{
+            .presentation = "desktop-gui",
+            .desktop_active_at_start = true,
+            .ui_observation = "state-changes-only",
+            .other_desktop_activity = "not-controlled",
+        }, .{});
+        const context = try std.json.parseFromSlice(std.json.Value, a, context_bytes, .{});
+        try environment.value.object.put(a, "client_context", context.value);
+    }
     const artifact_bytes = try std.json.Stringify.valueAlloc(a, .{
         .{ .component = "spectra", .sha256 = spectra_hash.sha256[0..], .bytes = spectra_hash.bytes },
         .{ .component = "lifecycle-fixture", .sha256 = fixture_hash.sha256[0..], .bytes = fixture_hash.bytes },
@@ -194,7 +210,10 @@ pub fn create(app: *r4os.App, records_path: [:0]const u8, started: r4os.abi.Time
         .finished_at_utc = &end,
         .release_version = release_version,
         .kernel_version = kernel_version,
-        .environment_id = if (backend == null) "r4os-native-standard3-v1" else "r4os-qemu-standard3-v1",
+        .environment_id = if (presentation == .desktop_gui)
+            (if (backend == null) "r4os-native-gui-standard3-v1" else "r4os-qemu-gui-standard3-v1")
+        else
+            (if (backend == null) "r4os-native-standard3-v1" else "r4os-qemu-standard3-v1"),
         .comparison_key = chosen_comparison,
         .environment = environment.value,
         .artifacts = artifacts.value,

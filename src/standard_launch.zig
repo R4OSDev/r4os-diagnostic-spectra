@@ -5,6 +5,13 @@ const r4os = @import("r4os");
 const cli = @import("cli.zig");
 const Output = @import("output.zig").Output;
 const model = @import("standard_model.zig");
+const export_api = @import("standard_export.zig");
+pub const Report = struct {
+    exit_code: i32 = 1,
+    saved: ?export_api.Result = null,
+    phase: []const u8 = "prepare",
+    error_name: ?[]const u8 = null,
+};
 pub const prefix = "/STDWORK:";
 const executable = "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\SPECTRA.R4X";
 
@@ -24,7 +31,7 @@ pub fn workerRequest(app: *r4os.App, raw: []const u8, buffer: []u8) !cli.Request
     return request;
 }
 
-fn run(app: *r4os.App, request: *const cli.Request) !i32 {
+fn run(app: *r4os.App, request: *const cli.Request, report: *Report, emit: bool, presentation: export_api.Presentation) !i32 {
     const sys = app.system();
     const config = try @import("standard_reference.zig").parseOptions(request.args());
     const full_standard = config.area == null and config.settle_ms == 200;
@@ -75,32 +82,39 @@ fn run(app: *r4os.App, request: *const cli.Request) !i32 {
     };
     const started = sys.monotonicNanoseconds() orelse return error.Clock;
     var closing = false;
+    var close_started: u64 = 0;
+    report.phase = "measure";
     var completion: r4os.abi.ProgramProcessCompletion = .{};
     while (true) {
         if (sys.programShouldClose() and !closing) {
             _ = sys.programHandleRequestClose(&handle);
             closing = true;
+            close_started = sys.monotonicNanoseconds() orelse return error.Clock;
         }
         const rc = sys.programHandleWait(&handle, @max(1, sys.ticksFromMilliseconds(200)), &completion);
         if (rc == r4os.abi.program_handle_ok) break;
         if (rc != r4os.abi.program_handle_error_timeout) return error.Wait;
-        if ((sys.monotonicNanoseconds() orelse return error.Clock) -| started >= timeout) return error.Timeout;
+        const now = sys.monotonicNanoseconds() orelse return error.Clock;
+        if (closing and now -| close_started >= 5_000_000_000) return error.Cancelled;
+        if (now -| started >= timeout) return error.Timeout;
     }
     if (sys.programHandleReap(&handle, &completion) != r4os.abi.program_handle_ok) return error.Reap;
     reaped = true;
     const finished_utc = sys.timeState();
     const info = sys.fileInfo(result_name) orelse return error.MissingResult;
     if (info.size == 0 or info.size > 256 * 1024) return error.ResultSize;
-    var out = Output.init(app, request);
-    var buffer: [4096]u8 = undefined;
-    var at: u64 = 0;
-    while (at < info.size) {
-        const count: usize = @intCast(@min(buffer.len, info.size - at));
-        if (sys.fileReadAt(result_name, @intCast(at), buffer[0..count]) != count) return error.ResultRead;
-        out.write(buffer[0..count]);
-        at += count;
+    if (emit) {
+        var out = Output.init(app, request);
+        var buffer: [4096]u8 = undefined;
+        var at: u64 = 0;
+        while (at < info.size) {
+            const count: usize = @intCast(@min(buffer.len, info.size - at));
+            if (sys.fileReadAt(result_name, @intCast(at), buffer[0..count]) != count) return error.ResultRead;
+            out.write(buffer[0..count]);
+            at += count;
+        }
+        if (!out.finish()) return error.ResultWrite;
     }
-    if (!out.finish()) return error.ResultWrite;
     if (closing or completion.exit_code != 0) return if (closing) 4 else completion.exit_code;
     if (!full_standard) {
         _ = sys.fileDelete(result_name);
@@ -108,27 +122,46 @@ fn run(app: *r4os.App, request: *const cli.Request) !i32 {
         return 0;
     }
     const machine_path = if (request.format == .json) result_name else raw_name;
-    const saved = @import("standard_export.zig").create(app, machine_path, started_utc, finished_utc, if (config.path[0] != 0) config.key[0..config.key_len] else null) catch |err| {
-        sys.write("SPECTRA STANDARD export: ");
-        sys.println(@errorName(err));
-        sys.write("SPECTRA STANDARD raw records retained: ");
-        sys.println(machine_path);
+    report.phase = "save";
+    const saved = export_api.createWithPresentation(app, machine_path, started_utc, finished_utc, if (config.path[0] != 0) config.key[0..config.key_len] else null, presentation) catch |err| {
+        report.error_name = @errorName(err);
+        if (emit) {
+            sys.write("SPECTRA STANDARD export: ");
+            sys.println(@errorName(err));
+            sys.write("SPECTRA STANDARD raw records retained: ");
+            sys.println(machine_path);
+        }
         return 1;
     };
+    report.saved = saved;
     _ = sys.fileDelete(result_name);
     if (request.format != .json) _ = sys.fileDelete(machine_path);
-    sys.write("SPECTRA STANDARD run: ");
-    sys.println(saved.path[0..saved.path_len]);
-    sys.write("SPECTRA STANDARD SHA256: ");
-    sys.println(&saved.sha256);
+    if (emit) {
+        sys.write("SPECTRA STANDARD run: ");
+        sys.println(saved.path[0..saved.path_len]);
+        sys.write("SPECTRA STANDARD SHA256: ");
+        sys.println(&saved.sha256);
+    }
     if (request.upload) return @import("standard_upload.zig").upload(app, saved.path[0..saved.path_len :0], &saved.sha256);
     return if (closing) 4 else completion.exit_code;
 }
 
 pub fn launch(app: *r4os.App, request: *const cli.Request) i32 {
-    return run(app, request) catch |err| {
+    var report: Report = .{};
+    return run(app, request, &report, true, .terminal) catch |err| {
         app.system().write("SPECTRA STANDARD: ");
         app.system().println(@errorName(err));
-        return 1;
+        return if (err == error.Cancelled) 4 else 1;
     };
+}
+
+/// Same execution/export as the CLI, with a typed result for the private GUI
+/// job. It never infers success from console output or starts an upload.
+pub fn launchForGui(app: *r4os.App, request: *const cli.Request) Report {
+    var report: Report = .{};
+    report.exit_code = run(app, request, &report, false, .desktop_gui) catch |err| result: {
+        report.error_name = @errorName(err);
+        break :result if (err == error.Cancelled) @as(i32, 4) else @as(i32, 1);
+    };
+    return report;
 }
