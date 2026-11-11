@@ -1,7 +1,6 @@
 const r4os = @import("r4os");
 const metadata = @import("metadata.zig");
 
-
 var boot_log_buffer: [r4os.abi.boot_log_buffer_size]u8 = .{0xA5} ** r4os.abi.boot_log_buffer_size;
 
 const RuntimeR4LInterfaceHeader = extern struct {
@@ -45,8 +44,8 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     ok = checkR4XStartImports(&ctx, start) and ok;
     ok = checkNamedRuntimeR4L(&ctx, start) and ok;
     ok = checkR4X(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\BEEP.R4X") and ok;
-    ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\BEEP.R4X") and ok;
-    ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\R4XSTARTD.R4X") and ok;
+    ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\BEEP.R4X", true) and ok;
+    ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\R4XSTARTD.R4X", false) and ok;
     ok = checkInvalidStartRejected(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\BADSTART.R4X") and ok;
     ok = checkPlatformApiFilesAbsent(&ctx) and ok;
     ok = checkR4LQueryNegativeValidation(&ctx) and ok;
@@ -114,7 +113,7 @@ fn checkR4X(ctx: *const r4os.r4sys.Context, path: [*:0]const u8) bool {
     return magic_ok and version_ok and arch_ok and header_ok and offset_ok and code_ok and entry_ok and flags_ok and reserved_ok;
 }
 
-fn checkCurrentStartContract(ctx: *const r4os.r4sys.Context, path: [*:0]const u8) bool {
+fn checkCurrentStartContract(ctx: *const r4os.r4sys.Context, path: [*:0]const u8, generation2: bool) bool {
     var head: [8192]u8 = undefined;
     const data = readHeaderPrefix(ctx, path, head[0..]) orelse return false;
     ctx.print("read ");
@@ -125,11 +124,14 @@ fn checkCurrentStartContract(ctx: *const r4os.r4sys.Context, path: [*:0]const u8
     var strings_buf: [4096]u8 = undefined;
     const strings = readStringBlock(ctx, path, data, strings_buf[0..]) orelse return false;
     const r4m_ok = checkR4M(ctx, "R4XStart R4M", data, 1, 1, 1);
-    const start_ok = stringBlockHas(strings, "r4x.start=r4xstart");
-    const entry_meta_ok = stringBlockHas(strings, "r4x.entry=R4XStart");
-    const context_ok = stringBlockHas(strings, "r4x.context=R4XStartContext");
-    const export_ok = hasExportInStringBlock(data, strings, "R4XStart", 1);
-    const r4sys_ok = hasImportInStringBlock(data, strings, "R4SYS", "Query", 1);
+    const revision: u32 = if (generation2) 2 else 1;
+    const start_ok = stringBlockHas(strings, if (generation2) "r4x.start=r4xstart2" else "r4x.start=r4xstart");
+    const entry_meta_ok = stringBlockHas(strings, if (generation2) "r4x.entry=R4XStart2" else "r4x.entry=R4XStart");
+    const context_ok = stringBlockHas(strings, if (generation2) "r4x.context=R4XStartContext2" else "r4x.context=R4XStartContext");
+    const export_ok = hasExportInStringBlock(data, strings, if (generation2) "R4XStart2" else "R4XStart", revision) and
+        !hasExportInStringBlock(data, strings, if (generation2) "R4XStart" else "R4XStart2", if (generation2) 1 else 2);
+    const r4sys_ok = hasImportInStringBlock(data, strings, "R4SYS", if (generation2) "Query2" else "Query", revision) and
+        !hasImportInStringBlock(data, strings, "R4SYS", if (generation2) "Query" else "Query2", if (generation2) 1 else 2);
     printCheck(ctx, "R4XStart start contract", start_ok);
     printCheck(ctx, "R4XStart entry meta", entry_meta_ok);
     printCheck(ctx, "R4XStart context meta", context_ok);
@@ -698,8 +700,7 @@ fn checkStressR4XStarts(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.C
         range_byte_delta > 0 and
         after.loader_file_full_reads == before.loader_file_full_reads;
     const detail_ok = if (detailed) logical_delta > range_delta and
-        hit_delta > 0 and fill_delta > 0 and fill_delta <= range_delta and fill_byte_delta > 0
-    else metadata.countersValid(before, false) and metadata.countersValid(after, false);
+        hit_delta > 0 and fill_delta > 0 and fill_delta <= range_delta and fill_byte_delta > 0 else metadata.countersValid(before, false) and metadata.countersValid(after, false);
     const reader_ok = reader_delta >= ids.len and detail_ok and
         after.loader_metadata_window_capacity_bytes == metadata_window_capacity_bytes;
     var cleaned_tasks: usize = 0;
@@ -999,8 +1000,7 @@ fn checkRelocationWindowDemand(ctx: *const r4os.r4sys.Context, dev: *const r4os.
     // count grouped callback requests, not individual decoded relocations.
     const detail_ok = if (detailed) logical_delta >= expected_windows and
         logical_delta < relocation_count and hit_delta > 0 and
-        fill_delta >= expected_windows and fill_delta <= range_delta
-    else metadata.countersValid(before, false) and metadata.countersValid(after, false);
+        fill_delta >= expected_windows and fill_delta <= range_delta else metadata.countersValid(before, false) and metadata.countersValid(after, false);
     const io_ok = relocation_count >= 170 and
         range_delta > 0 and range_delta <= expected_windows + 16 and detail_ok and
         after.loader_file_full_reads == before.loader_file_full_reads;
