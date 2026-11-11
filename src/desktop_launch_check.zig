@@ -11,10 +11,19 @@ const image = "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\SPECTRA.R4X";
 pub fn run(check: anytype, app: *r.App) !void {
     var sys = check.sys;
     var slow: a.ServiceInfo = .{};
+    if (sys.serviceStatus("SVCSTALL", &slow) != a.service_api_result_not_found) return error.LaunchFixtureAlreadyPresent;
     if (sys.serviceInstall("SVCSTALL", service_path, "/HOLD /STALLENDPOINT", a.service_start_manual, "Async Desktop launch fixture", &slow) != 0) return error.LaunchFixtureInstall;
-    defer _ = sys.serviceRemove("SVCSTALL");
-    if (sys.serviceStart("SVCSTALL", &slow) != 0) return error.LaunchFixtureStart;
-    defer _ = sys.serviceStop("SVCSTALL", &slow, 2000);
+    var started = false;
+    defer {
+        const stop = if (started) sys.serviceStop("SVCSTALL", &slow, 2000) else 0;
+        const removed = if (stop == 0) sys.serviceRemove("SVCSTALL") else a.service_api_result_busy;
+        if (stop != 0 or removed != 0) check.launch_cleanup_ack = false;
+        check.out.record("launch-fixture-cleanup", "DESKTOP", 0, .{ .stop = stop, .remove = removed, .owned_definition = true });
+    }
+    const start = sys.serviceStart("SVCSTALL", &slow);
+    check.out.record("launch-fixture-start", "DESKTOP", 0, .{ .status = start, .instance_id = slow.instance_id, .endpoint = slow.handle });
+    if (start != 0) return error.LaunchFixtureStart;
+    started = true;
     const ready_at = sys.ticks();
     while (true) {
         if (sys.serviceStatus("SVCSTALL", &slow) == 0 and slow.handle != 0) break;

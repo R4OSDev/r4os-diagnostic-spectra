@@ -103,8 +103,8 @@ pub fn run(app: *r.App, check: *Check) !void {
     // Keep every original APPDEF/CLOCK oracle. Those classic producers do
     // not supply native BOs. Start a new reservation within the SAME overall
     // deadline, after both originals have actually exited and been reaped.
-    _ = try check.call(.end, .{}, 0, 0);
-    check.session = false;
+    if (!check.endSession()) return error.SessionEnd;
+    try check.checkDeadline();
     _ = try check.beginSession(.begin);
     const before = try sample(app, check, 0);
     const ticket: Status.Ticket = .{ .parent = .{ .instance = check.caller.instance_id, .generation = check.caller.generation }, .nonce = check.sys.monotonicNanoseconds() orelse return error.Clock };

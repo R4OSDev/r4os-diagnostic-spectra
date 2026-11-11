@@ -1,4 +1,4 @@
-Spectra - Diagnosewerkzeug 0.1.86
+﻿Spectra - Diagnosewerkzeug 0.1.86
 =============================
 
 Aufrufe
@@ -390,3 +390,9 @@ rote Originale bleiben in66; physische Sicht/Hoeren/Latenz SKIP.
 Genau1finalSTANDARD62 e9f64dc9-ec35-4765-9cd1-c7220270545a/30/4/metric2/6valid:
 lokal und R4OS Server vollstaendig validiert; OriginalSHA256 a87bc2f70d68f2111b589f93f15f6e0b6d026372e1e84407cd9497bac8e78c23.
 Vollstaendige Belege: Docs/Core/Parallelitaet.txt/0.87.62 und Laufarchiv.
+
+
+Desktop-Abnahme0.90.65 / Spectra0.1.111
+--------------------------------------
+Der Replay-Uebergang verwendet denselben begrenzten Sessionabschluss wie die regulaere Bereinigung. Weitere Arbeit beginnt nach der echten Quittung und erneuter Pruefung der unveraenderten Gesamtfrist. Der asynchrone Launchtest prueft vor Aufnahme seiner festen SVCSTALL-Fixture auf eine bereits bestehende Definition. Start-, Stop- und Removeergebnisse stehen im Originalexport. Fehlende Cleanupquittungen verhindern den erfolgreichen Abschluss. Der feste Endpunktname des ServiceClassDiag-Verbrauchers bleibt dessen Vertrag.
+Der erste Original207-Lauf mit110 scheiterte am sofortigen Session-Ende, der anschliessende208-Lauf am Start der festen Fixture. Beide unveraenderten Ergebnisse bleiben im lokalen Migrationsarchiv. Ein lokaler Entwurf mit eigenem Dienstnamen wurde nach Pruefung des festen Fixtureendpunkts korrigiert und nie im Gast ausgefuehrt.

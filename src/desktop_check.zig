@@ -256,20 +256,19 @@ pub const Check = struct {
                 ok = false;
             } else self.native_report_owned = false;
         }
-        if (self.session) {
-            const start = self.sys.ticks();
-            while (self.session) {
-                if (self.request(.end, .{}, 0, 0)) |_| self.session = false else |err| {
-                    if (err != error.BusyOrUserActivity or self.sys.ticks() -% start >= self.sys.ticksFromMilliseconds(3000)) {
-                        ok = false;
-                        break;
-                    }
-                    self.sys.sleepTicks(1);
-                }
-            }
-        }
+        if (!self.endSession()) ok = false;
         if (!self.closeConnection()) ok = false;
         return ok;
+    }
+    pub fn endSession(self: *Check) bool {
+        const start = self.sys.ticks();
+        while (self.session) {
+            if (self.request(.end, .{}, 0, 0)) |_| self.session = false else |err| {
+                if (err != error.BusyOrUserActivity or self.sys.ticks() -% start >= self.sys.ticksFromMilliseconds(3000)) return false;
+                self.sys.sleepTicks(1);
+            }
+        }
+        return true;
     }
     pub fn releaseCapture(self: *Check, desk: *const r.r4desk.Context) bool {
         var ok = true;
