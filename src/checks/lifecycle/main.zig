@@ -214,13 +214,16 @@ pub fn r4_app_main(app: *r4os.App) i32 {
         ctx.sys.println(if (ok) "SPECTRA LIFECYCLE services result: OK" else "SPECTRA LIFECYCLE services result: FAILED");
         return if (ok) 0 else 1;
     }
+    // Internal GUI owner fixtures prove readiness through their real frames.
+    // stdout now has a real lazy Console owner: success chatter would add an
+    // unrelated payload to the strict GUI resource oracle. Failures still log.
+    if (hasArg(ctx.sys.argsRaw(), gui_payload_hold_arg)) return guiPayloadHold(&ctx);
+    if (hasArg(ctx.sys.argsRaw(), gui_raster_chain_hold_arg)) return guiRasterChainHold(&ctx);
+    if (hasArg(ctx.sys.argsRaw(), gui_frame_hold_arg)) return guiFrameHold(&ctx);
     ctx.sys.println("SPECTRA LIFECYCLE");
     if (hasArg(ctx.sys.argsRaw(), "/WATCHCANCEL")) return testWatchCancellation(&ctx, false);
     if (hasArg(ctx.sys.argsRaw(), "/STANDARDCANCEL")) return testWatchCancellation(&ctx, true);
 
-    if (hasArg(ctx.sys.argsRaw(), gui_payload_hold_arg)) return guiPayloadHold(&ctx);
-    if (hasArg(ctx.sys.argsRaw(), gui_raster_chain_hold_arg)) return guiRasterChainHold(&ctx);
-    if (hasArg(ctx.sys.argsRaw(), gui_frame_hold_arg)) return guiFrameHold(&ctx);
     if (!ctx.dev.hasFn("memory_summary")) return fail(&ctx, "memory snapshot missing");
     if (hasArg(ctx.sys.argsRaw(), "/WORKERS")) {
         if (!@import("compute_workers.zig").run(ctx.sys)) return fail(&ctx, "compute warmup");
@@ -1236,9 +1239,10 @@ fn lifecycleWarmup(ctx: *DiagApi) bool {
     // Each completion/output fixture owns its terminal capture. An inherited
     // parent transcript intentionally retains sealed producer blocks after
     // Reap, which is a different lifetime from the process baseline here.
-    // Warm the same explicit host shape used by the measured ring.
-    for (&handles) |*handle| {
-        if (ctx.desk.programSpawnWithConsoleHostHandle(cleanup_path, route.arguments("LIFECYCLE", "/LIFECYCLEEXIT 0 0").ptr(), .auto, .terminal_mode, handle) != r4os.abi.program_handle_ok)
+    // Warm the actual retained-output shape too: the measured children write
+    // 32..55 bytes, which allocates producer backing even after normal Exit.
+    for (&handles, 0..) |*handle, index| {
+        if (ctx.desk.programSpawnWithConsoleHostHandle(cleanup_path, route.arguments("LIFECYCLE", lifecycle_ring_args[index]).ptr(), .auto, .terminal_mode, handle) != r4os.abi.program_handle_ok)
             return false;
     }
     for (&handles) |*handle| {
@@ -1959,9 +1963,12 @@ fn warmLifecycleServices(ctx: *DiagApi) bool {
         return programLifecycleFail(ctx, "service caller stack identity changed");
     ctx.sys.write("SPECTRA LIFECYCLE programlifecycle service warm caller=");
     ctx.sys.printU64(stack_after.owner_id);
-    ctx.sys.write(" stack=");ctx.sys.printU64(stack_after.id);
-    ctx.sys.write(" committed=");ctx.sys.printU64(stack_before.committed_bytes);
-    ctx.sys.write("/");ctx.sys.printU64(stack_after.committed_bytes);
+    ctx.sys.write(" stack=");
+    ctx.sys.printU64(stack_after.id);
+    ctx.sys.write(" committed=");
+    ctx.sys.printU64(stack_before.committed_bytes);
+    ctx.sys.write("/");
+    ctx.sys.printU64(stack_after.committed_bytes);
     ctx.sys.println(" exit0=OK exit37=OK restarts=OK");
     return true;
 }
@@ -2191,16 +2198,16 @@ fn sameLifecycleOwnership(
     current_registry: r4os.abi.ProgramRegistrySummaryV2,
 ) bool {
     return sameTotals(baseline.resources, current.resources) and
-            sameLifecycleStorageCurrent(baseline.storage, current.storage) and
-            baseline.instance_count == current.instance_count and
-            current_registry.reserved_slots == registry.reserved_slots and
-            current_registry.live_slots == registry.live_slots and
-            current_registry.done_slots == registry.done_slots and
-            current_registry.retiring_slots == registry.retiring_slots and
-            current_registry.completion_pending == registry.completion_pending and
-            current_registry.completion_ready == registry.completion_ready and
-            current_registry.completion_output_bytes == registry.completion_output_bytes and
-            current_registry.retire_queued == registry.retire_queued;
+        sameLifecycleStorageCurrent(baseline.storage, current.storage) and
+        baseline.instance_count == current.instance_count and
+        current_registry.reserved_slots == registry.reserved_slots and
+        current_registry.live_slots == registry.live_slots and
+        current_registry.done_slots == registry.done_slots and
+        current_registry.retiring_slots == registry.retiring_slots and
+        current_registry.completion_pending == registry.completion_pending and
+        current_registry.completion_ready == registry.completion_ready and
+        current_registry.completion_output_bytes == registry.completion_output_bytes and
+        current_registry.retire_queued == registry.retire_queued;
 }
 
 fn waitLifecycleBaseline(
@@ -2667,9 +2674,7 @@ fn guiPayloadHold(ctx: *DiagApi) i32 {
         return fail(ctx, "GUI payload fixture raster allocation failed");
     if (ctx.draw.guiPresent() < 0)
         return fail(ctx, "GUI payload fixture present failed");
-    ctx.sys.println("SPECTRA LIFECYCLE gui-payload fixture: ready");
     while (!ctx.sys.programShouldClose()) ctx.sys.sleepTicks(1);
-    ctx.sys.println("SPECTRA LIFECYCLE gui-payload fixture: done");
     return 0;
 }
 
@@ -2691,9 +2696,7 @@ fn guiRasterChainHold(ctx: *DiagApi) i32 {
     }
     if (ctx.draw.guiPresent() < 0)
         return fail(ctx, "GUI raster-chain fixture present failed");
-    ctx.sys.println("SPECTRA LIFECYCLE gui-raster-chain fixture: ready");
     while (!ctx.sys.programShouldClose()) ctx.sys.sleepTicks(1);
-    ctx.sys.println("SPECTRA LIFECYCLE gui-raster-chain fixture: done");
     return 0;
 }
 
@@ -2796,9 +2799,7 @@ fn guiFrameHold(ctx: *DiagApi) i32 {
         return fail(ctx, "GUI frame fixture cancel failed");
     building = false;
 
-    ctx.sys.println("SPECTRA LIFECYCLE gui-frame fixture: ready commands=4116 resources=138 commit=1 cancel=1");
     while (!ctx.sys.programShouldClose()) ctx.sys.sleepTicks(1);
-    ctx.sys.println("SPECTRA LIFECYCLE gui-frame fixture: done");
     return 0;
 }
 

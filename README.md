@@ -1,4 +1,4 @@
-﻿# Spectra
+# Spectra
 
 Spectra is R4OS's diagnostic tool for kernel measurements, logs, checks and
 explicit benchmarks. Terminal and SSH keep the existing CLI, including help
@@ -369,3 +369,16 @@ changed standalone service warm/measured entry also passes with a new caller
 and actual64KB owned stack growth. Earlier red originals remain archived;
 all_native_attempts_pass=false, required_scope_pass=true. Documentation and
 formal release/benchmark/push completion are tracked separately in the roadmap.
+
+Version0.1.113 keeps successful private GUI payload/frame fixtures silent.
+Their real frames prove readiness; failure diagnostics and all exact
+owner/counter/byte/kill/reap assertions remain. The completion-ring warmup
+uses the same32..55-byte output shape as the measured children before the
+original global baseline is captured. An empty-output warmup does not prepare
+the retained producer backing needed by that measured ring. All measured
+global and local memory equalities remain intact.
+
+PROGRAMSTORAGE requires a running queue-backed SVCSTALL. The isolated full
+PROGRAMLIFECYCLE profile requires a fresh instance of that fixture and CONFIG
+options PROGRAMREGISTRY/PROGRAMLIFECYCLE selftest=yes. These options explicitly
+admit the existing private fault and forced-ID tests in the isolated profile.

@@ -50,6 +50,8 @@ pub fn fixtureOutput(group: []const u8, args: []const u8) FixtureOutput {
     const cli = @import("cli.zig");
     if (!cli.same(group, "LIFECYCLE")) return .framed;
     if (cli.same(args, "/COMPUTEHOLD")) return .quiet_success;
+    if (cli.same(args, "/GUIPAYLOADHOLD") or cli.same(args, "/GUIRASTERCHAINHOLD") or
+        cli.same(args, "/GUIFRAMEHOLD")) return .quiet_success;
     // Match the fixture's legacy bounded space/tab and decimal grammar.
     if (args.len >= 256) return .framed;
     var tokens = std.mem.tokenizeAny(u8, args, " \t");
@@ -81,4 +83,9 @@ test "declared fixture payload preserves intentional exits and unexpected failur
     }
     try std.testing.expect(!fixtureOutput("LIFECYCLE", "/COMPUTEHOLD").needsResult(0));
     try std.testing.expect(fixtureOutput("LIFECYCLE", "/COMPUTEHOLD").needsResult(1));
+    for ([_][]const u8{ "/GUIPAYLOADHOLD", "/GUIRASTERCHAINHOLD", "/GUIFRAMEHOLD" }) |gui| {
+        try std.testing.expect(!fixtureOutput("LIFECYCLE", gui).needsResult(0));
+        try std.testing.expect(fixtureOutput("LIFECYCLE", gui).needsResult(1));
+        try std.testing.expect(fixtureOutput("THREAD", gui).needsResult(0));
+    }
 }

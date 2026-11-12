@@ -1,8 +1,18 @@
-﻿Spectra - Diagnosewerkzeug 0.1.86
+﻿Spectra - Diagnosewerkzeug 0.1.113
 =============================
 
 Aufrufe
 -------
+Die privaten GUI-Lebensdauerfixtures verwenden ihre echten Frames als
+Bereitschaftssignal und erzeugen bei Erfolg keine zusaetzlichen Console-
+Payloads. Die Ring-Aufwaermrunde verwendet dieselben Completion-Ausgaben
+von32..55Bytes wie die gemessene Runde, bevor deren globale Ausgangsbasis
+erfasst wird. Alle gemessenen Ressourcen-, Speicher- und Reapgleichheiten
+bleiben erhalten. PROGRAMSTORAGE benoetigt den laufenden queue-backed
+SVCSTALL; PROGRAMLIFECYCLE benoetigt einen frisch gestarteten SVCSTALL sowie
+die ausdruecklichen privaten CONFIG-Selbsttestoptionen fuer PROGRAMREGISTRY
+und PROGRAMLIFECYCLE. Diese Fehleroptionen gehoeren zur isolierten Diagnose.
+
 CHECK VM /INVENTORY prueft frische, noch nicht physisch belegte Task-/Thread-
 Ausgabepuffer, echte Demand-Faults und genauen VM-Abbau. Der normale VM-Check
 enthaelt den Fall ebenfalls. Maximal16 Epochenversuche; Restart ohne Zeilen
