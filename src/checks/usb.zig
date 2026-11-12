@@ -15,7 +15,7 @@ fn headers(dev: *const r4os.r4dev.Context) bool {
     }
     return true;
 }
-pub fn run(app: *r4os.App, args: []const u8, out: *Output) i32 {
+pub fn run(app: *r4os.App2, args: []const u8, out: *Output) i32 {
     if (args.len != 0) {
         out.unavailable("usb", "use CHECK USB without extra arguments");
         return 2;

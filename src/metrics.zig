@@ -13,7 +13,7 @@ fn optional(out: *Output, group: []const u8, index: u32, value: anytype) bool {
     return false;
 }
 
-fn tasks(app: *r4os.App, dev: *const r4os.r4dev.Context, out: *Output) bool {
+fn tasks(app: *r4os.App2, dev: *const r4os.r4dev.Context, out: *Output) bool {
     const allocator = app.lowLevel().allocator();
     const sys = app.system();
     var attempt: usize = 0;
@@ -52,7 +52,7 @@ fn tasks(app: *r4os.App, dev: *const r4os.r4dev.Context, out: *Output) bool {
     return false;
 }
 
-pub fn run(app: *r4os.App, group: []const u8, out: *Output) i32 {
+pub fn run(app: *r4os.App2, group: []const u8, out: *Output) i32 {
     const dev = app.devicesLowLevel() orelse { out.unavailable("kernel", "R4DEV unavailable"); return 1; };
     const sys = app.system();
     var clock: abi.MonotonicClockInfo = .{};

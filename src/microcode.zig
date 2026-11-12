@@ -69,7 +69,7 @@ fn copies(dev: *const r4os.r4dev.Context) bool {
     }
     return true;
 }
-pub fn check(app: *r4os.App, out: *Output) i32 {
+pub fn check(app: *r4os.App2, out: *Output) i32 {
     const dev = app.devicesLowLevel() orelse return 2;
     if (!dev.hasFn("cpu_microcode_info")) { out.unavailable("microcode", "early microcode receipt unavailable"); return 2; }
     const decoded = d.checkFixtures(); const copied = copies(&dev);

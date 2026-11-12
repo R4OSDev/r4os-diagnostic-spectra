@@ -1,4 +1,4 @@
-# Spectra
+﻿# Spectra
 
 Spectra is R4OS's diagnostic tool for kernel measurements, logs, checks and
 explicit benchmarks. Terminal and SSH keep the existing CLI, including help
@@ -382,3 +382,25 @@ PROGRAMSTORAGE requires a running queue-backed SVCSTALL. The isolated full
 PROGRAMLIFECYCLE profile requires a fresh instance of that fixture and CONFIG
 options PROGRAMREGISTRY/PROGRAMLIFECYCLE selftest=yes. These options explicitly
 admit the existing private fault and forced-ID tests in the isolated profile.
+
+Version0.1.114 uses the real App2/Query2/SYS2 startup and R4STD init2.
+Shared STDIO/stream helpers retain confirmed prefixes and stop on unknown
+acceptance. Upload hashes and sends the same immutable snapshot, retaining
+all PostStream storage until actual disposal; Close is not a server receipt.
+The original STANDARD workloads, reference, scoring and old transition
+fixtures remain unchanged. Diagnostic reclaim requests honor the actual
+64-frame admission, and the churn image is warmed before strict PMM/VM and
+owner equality. GUI/service lazy console payloads are counted independently
+from launch class. Subsystem input backpressure retains the exact target
+and one finite admission budget without changing original work deadlines.
+Migration validation and any remaining limits are recorded separately in
+Docs/API/ConsumerMigration.txt and the active roadmap.
+
+The full PROGRAMSTORAGE and PROGRAMLIFECYCLE checks initialize an installed
+net.tcp provider through the shared ProviderInfo query before global memory
+baselines. Asynchronous service startup can otherwise demand-load that
+provider during unrelated GUI work. Its retained module/runtime owners are
+prepared explicitly, without creating sockets or sending packets; an absent
+provider stays absent. Every measured heap/PMM/VM/payload/owner equality
+remains strict. The pinned native allocation evidence belongs in the
+migration report, rather than a byte allowance in the test.

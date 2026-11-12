@@ -168,7 +168,7 @@ const Peers = struct {
         }
     }
 };
-fn exercise(app: *r4os.App) !void {
+fn exercise(app: *r4os.App2) !void {
     var sys = app.system();
     var dev = app.devicesLowLevel() orelse return error.Devices;
     system = sys;
@@ -303,7 +303,7 @@ fn exercise(app: *r4os.App) !void {
     sys.printU64(returned);
     sys.println(" own-slots=0 data=exact");
 }
-pub fn run(app: *r4os.App) i32 {
+pub fn run(app: *r4os.App2) i32 {
     exercise(app) catch |err| {
         app.system().write("SPECTRA VM AP failed: ");
         app.system().println(@errorName(err));

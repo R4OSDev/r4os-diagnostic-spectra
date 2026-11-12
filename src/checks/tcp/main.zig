@@ -4,7 +4,7 @@ const App = struct {
     sys: r4os.r4sys.Context,
     net: r4os.r4net.Context,
 
-    fn init(r4_app: *r4os.App) ?App {
+    fn init(r4_app: *r4os.App2) ?App {
         return .{
             .sys = r4_app.system(),
             .net = r4_app.networkLowLevel() orelse return null,
@@ -12,7 +12,7 @@ const App = struct {
     }
 };
 
-pub fn r4_app_main(app: *r4os.App) i32 {
+pub fn r4_app_main(app: *r4os.App2) i32 {
     const ctx = App.init(app) orelse return r4os.abi.err_no_group;
     return if (testTcpPerformance(&ctx)) 0 else 1;
 }

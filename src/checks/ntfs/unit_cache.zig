@@ -149,7 +149,7 @@ fn check(sys: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Context) !void {
     sys.printU64(reclaimed_copies);
     sys.println(" parallel=2/64 joins=2 notifications=closed rename/replacement=restored mountGeneration=new bytes/canaries=yes");
 }
-pub fn run(app: *r4os.App) i32 {
+pub fn run(app: *r4os.App2) i32 {
     const sys = app.system();
     const dev = app.devicesLowLevel() orelse return abi.err_no_group;
     const files = app.files() orelse return abi.err_no_fn;

@@ -14,7 +14,7 @@ fn headerContract(dev: *const r4os.r4dev.Context) bool {
     return true;
 }
 
-pub fn run(app: *r4os.App, out: *Output) i32 {
+pub fn run(app: *r4os.App2, out: *Output) i32 {
     const dev = app.devicesLowLevel() orelse {
         out.unavailable("memory", "R4DEV missing");
         return 2;

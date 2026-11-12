@@ -44,7 +44,7 @@ const DynamicBaseline = struct {
     instance_stack_committed_bytes: u64,
 };
 
-pub fn r4_app_main(app: *r4os.App) i32 {
+pub fn r4_app_main(app: *r4os.App2) i32 {
     var sys = app.system();
     const resources = app.resources();
     global_sys = sys;

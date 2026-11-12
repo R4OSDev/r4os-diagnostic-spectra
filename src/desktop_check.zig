@@ -303,7 +303,7 @@ pub const Check = struct {
         self.screenshot_intent = false;
         return true;
     }
-    fn work(self: *Check, app: *r.App, restart: bool, audio: bool, capture: bool, launch: bool, replay: bool) !void {
+    fn work(self: *Check, app: *r.App2, restart: bool, audio: bool, capture: bool, launch: bool, replay: bool) !void {
         for (paths) |path| if (!self.sys.exists(path)) return error.RequiredFullFixtureMissing;
         const begin = try self.beginSession(.begin);
         if ((restart or audio or capture) and begin.flags & wire.isolated == 0) return error.RequiresIsolatedDesktopBoot;
@@ -398,7 +398,7 @@ fn id(handle: a.ProgramProcessHandle) wire.Identity {
     return .{ .instance = handle.instance_id, .generation = handle.generation };
 }
 
-pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
+pub fn run(app: *r.App2, args: []const u8, out: *Output) i32 {
     var navigation_options = std.mem.tokenizeAny(u8, args, " \t");
     while (navigation_options.next()) |option| if (cli.same(option, "/NAV")) return @import("explorer_navigation_check.zig").run(app, args, out);
 

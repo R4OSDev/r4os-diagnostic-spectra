@@ -15,23 +15,24 @@ pub const Report = struct {
 pub const prefix = "/STDWORK:";
 const executable = "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\SPECTRA.R4X";
 
-pub fn workerRequest(app: *r4os.App, raw: []const u8, buffer: []u8) !cli.Request {
+pub fn workerRequest(app: *r4os.App2, raw: []const u8, buffer: []u8) !cli.Request {
     if (!std.mem.startsWith(u8, raw, prefix) or raw.len - prefix.len >= 80) return error.InvalidWorker;
-    var name: [80:0]u8 = .{0} ** 80;
     const path = raw[prefix.len..];
     if (!std.mem.startsWith(u8, path, "C:\\TEMP\\BSC")) return error.InvalidWorker;
-    @memcpy(name[0..path.len], path);
-    const sys = app.system();
-    const info = sys.fileInfo(&name) orelse return error.InvalidWorker;
-    if (info.size == 0 or info.size > buffer.len) return error.InvalidWorker;
-    const got = sys.fileRead(&name, buffer[0..@intCast(info.size)]);
-    if (got != info.size) return error.InvalidWorker;
+    const files = app.files() orelse return error.InvalidWorker;
+    const file_path = try r4os.AbsoluteFilePath.parse(path);
+    const read = switch (files.readDocumentPrefix(file_path.asZ(), buffer, .{ .kind = r4os.abi.timeout_kind_finite, .nanoseconds = 2_000_000_000 })) {
+        .value => |value| value,
+        .failure => return error.InvalidWorker,
+    };
+    if (read.file_size == 0 or read.file_size > buffer.len or read.bytes != read.file_size) return error.InvalidWorker;
+    const got = read.bytes;
     const request = try cli.parse(buffer[0..@intCast(got)]);
     if (request.command != .bench or !cli.same(request.group(), "STANDARD") or request.export_len == 0) return error.InvalidWorker;
     return request;
 }
 
-fn run(app: *r4os.App, request: *const cli.Request, report: *Report, emit: bool, presentation: export_api.Presentation) !i32 {
+fn run(app: *r4os.App2, request: *const cli.Request, report: *Report, emit: bool, presentation: export_api.Presentation) !i32 {
     const sys = app.system();
     const config = try @import("standard_reference.zig").parseOptions(request.args());
     const full_standard = config.area == null and config.settle_ms == 200;
@@ -146,7 +147,7 @@ fn run(app: *r4os.App, request: *const cli.Request, report: *Report, emit: bool,
     return if (closing) 4 else completion.exit_code;
 }
 
-pub fn launch(app: *r4os.App, request: *const cli.Request) i32 {
+pub fn launch(app: *r4os.App2, request: *const cli.Request) i32 {
     var report: Report = .{};
     return run(app, request, &report, true, .terminal) catch |err| {
         app.system().write("SPECTRA STANDARD: ");
@@ -157,7 +158,7 @@ pub fn launch(app: *r4os.App, request: *const cli.Request) i32 {
 
 /// Same execution/export as the CLI, with a typed result for the private GUI
 /// job. It never infers success from console output or starts an upload.
-pub fn launchForGui(app: *r4os.App, request: *const cli.Request) Report {
+pub fn launchForGui(app: *r4os.App2, request: *const cli.Request) Report {
     var report: Report = .{};
     report.exit_code = run(app, request, &report, false, .desktop_gui) catch |err| result: {
         report.error_name = @errorName(err);

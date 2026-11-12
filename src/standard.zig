@@ -94,7 +94,7 @@ fn activeWarmup(index: usize, deadline: u64) model.Sample {
     }
     return total;
 }
-pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
+pub fn run(app: *r4os.App2, request: *const cli.Request, out: *Output) i32 {
     const config = @import("standard_reference.zig").parseOptions(request.args()) catch {
         out.unavailable("standard", "use /AREA:id, /BASELINE or /REFERENCE:path /COMPAREKEY:key, and /SETTLE:0..5000");
         return 2;

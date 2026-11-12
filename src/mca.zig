@@ -86,7 +86,7 @@ pub fn collect(dev: *const r4os.r4dev.Context, out: *Output) bool {
     out.message("mca", "Passive retained boot/terminal evidence; no current-health, atomic bank transaction, physical-address or general recovery claim. No status cleared. A delivered #MC is terminal even if a bank reports corrected data.", false);
     return true;
 }
-pub fn check(app: *r4os.App, out: *Output) i32 {
+pub fn check(app: *r4os.App2, out: *Output) i32 {
     const passed = d.checkFixtures();
     out.record("machine_check_decoder", "mca", 0, .{ .synthetic = true, .cases = d.fixture_count, .passed = passed, .hardware_injection = false });
     const dev = app.devicesLowLevel() orelse return 2;

@@ -122,7 +122,7 @@ const DiagApi = struct {
     dev: r4os.r4dev.Context,
     instance_id: u32,
 
-    fn init(r4_app: *r4os.App) ?DiagApi {
+    fn init(r4_app: *r4os.App2) ?DiagApi {
         return .{
             .instance_id = std.math.cast(u32, r4_app.raw.instance_id) orelse return null,
             .sys = r4_app.system(),
@@ -801,12 +801,28 @@ const App = struct {
             const fs_frames = (current_perf.fs_cache_pmm_reclaimable_bytes / frame_bytes) + 1;
             var requested_frames: u32 = if (fs_frames > 1024) 1024 else @intCast(fs_frames);
             if (requested_frames == 0) requested_frames = 1;
-            const current = self.ctx.dev.memoryReclaimProbe(requested_frames) orelse {
-                ok = self.failBool("pressure eviction reclaim unavailable") and ok;
-                return ok;
-            };
-            evict_vm_returned_frames +|= current.vm_returned_frames;
-            evict_vm_page_outs +|= current.vm_page_outs;
+            // The provider admits at most64frames. Preserve the original
+            // up-to1024-frame logical request, using bounded real receipts.
+            var returned: u32 = 0;
+            var chunks: u32 = 0;
+            while (returned < requested_frames and chunks < 16) : (chunks += 1) {
+                const count = @min(@as(u32, 64), requested_frames - returned);
+                const receipt = self.ctx.dev.memoryReclaimProbe(count) orelse {
+                    ok = self.failBool("pressure eviction reclaim unavailable") and ok;
+                    return ok;
+                };
+                if (receipt.version != r4os.abi.memory_reclaim_probe_version or
+                    receipt.size < @sizeOf(r4os.abi.ProgramMemoryReclaimProbe) or
+                    receipt.reason != r4os.abi.memory_reclaim_reason_diagnostic or
+                    receipt.requested_frames != count or receipt.failed_drains != 0) {
+                    ok = self.failBool("pressure eviction reclaim receipt") and ok;
+                    return ok;
+                }
+                evict_vm_returned_frames +|= receipt.vm_returned_frames;
+                evict_vm_page_outs +|= receipt.vm_page_outs;
+                if (receipt.returned_frames == 0) break;
+                returned +|= receipt.returned_frames;
+            }
             // Other programs can have independently evictable pages.  A VM
             // return from that owner is progress, but it does not prove this
             // diagnostic region was exercised.  Stop only once our exact
@@ -821,6 +837,9 @@ const App = struct {
             }
         }
         if (!target_evicted) {
+            self.ctx.sys.write("SPECTRA MEMORY eviction target untouched attempts="); self.ctx.sys.printU64(evict_attempt);
+            self.ctx.sys.write(" VMframes="); self.ctx.sys.printU64(evict_vm_returned_frames);
+            self.ctx.sys.write(" pageOuts="); self.ctx.sys.printU64(evict_vm_page_outs); self.ctx.sys.println("");
             ok = self.failBool("pressure eviction reclaim") and ok;
             return ok;
         }
@@ -872,6 +891,11 @@ const App = struct {
             evict_after_fault.memory_page_io_status != r4os.abi.memory_page_io_status_page_in_ok or
             evict_after_fault.memory_page_io_eviction_enabled != 1)
         {
+            self.ctx.sys.write("SPECTRA MEMORY eviction check VMframes/pageOuts/pinned/nonresident/found/faultByte/expected=");
+            self.ctx.sys.printU64(evict_vm_returned_frames); self.ctx.sys.write("/"); self.ctx.sys.printU64(evict_vm_page_outs);
+            self.ctx.sys.write("/"); self.ctx.sys.printU64(evict_state.pinned_pages); self.ctx.sys.write("/"); self.ctx.sys.printU64(evict_state.nonresident_pages);
+            self.ctx.sys.write("/"); self.ctx.sys.printU64(@intFromBool(evicted_page_found)); self.ctx.sys.write("/"); self.ctx.sys.printU64(evict_fault_byte);
+            self.ctx.sys.write("/"); self.ctx.sys.printU64(evict_expected_byte); self.ctx.sys.println("");
             ok = self.failBool("pressure eviction reclaim") and ok;
         }
         evict_returned_frames = evict_vm_returned_frames;
@@ -2083,7 +2107,7 @@ const App = struct {
     }
 };
 
-pub fn r4_app_main(r4_app: *r4os.App) i32 {
+pub fn r4_app_main(r4_app: *r4os.App2) i32 {
     var ctx = DiagApi.init(r4_app) orelse return r4os.abi.err_no_group;
     var app = App{ .ctx = &ctx };
     return app.run();

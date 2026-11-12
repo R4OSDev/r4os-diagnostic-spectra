@@ -31,12 +31,10 @@ export const loaderd_relocation_collision_words align(8) = [_]u64{
     0x00000004_00000004,
 };
 
-pub fn r4_app_main(app: *r4os.App) i32 {
-    const raw = app.startContext();
-    const api = &app.bundle;
-    var ctx = r4os.r4sys.Context.init(api);
-    var dev = r4os.r4dev.Context.init(api);
-    const start = r4os.r4xstart.Context.init(raw);
+pub fn r4_app_main(app: *r4os.App2) i32 {
+    var ctx = app.system();
+    var dev = app.devicesLowLevel() orelse return r4os.abi.err_no_group;
+    const start = app.context;
     var ok = true;
 
     ctx.println("SPECTRA LOADER");
@@ -45,7 +43,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     ok = checkNamedRuntimeR4L(&ctx, start) and ok;
     ok = checkR4X(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\BEEP.R4X") and ok;
     ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\BEEP.R4X", true) and ok;
-    ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\R4XSTARTD.R4X", false) and ok;
+    ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\R4XSTARTD.R4X", true) and ok;
     ok = checkInvalidStartRejected(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\BADSTART.R4X") and ok;
     ok = checkPlatformApiFilesAbsent(&ctx) and ok;
     ok = checkR4LQueryNegativeValidation(&ctx) and ok;
@@ -175,61 +173,43 @@ fn checkInvalidStartRejected(ctx: *const r4os.r4sys.Context, path: [*:0]const u8
     return r4m_ok and feature_ok and start_ok and entry_meta_ok and context_ok and no_exports and r4xstart_absent and r4sys_ok and rejected_ok;
 }
 
-// 0.57.6: Generischer Vertragstest fuer eine Kernel-Gruppentabelle -
-// Import-Meta (group_id, min_version, group_interface-Flag) plus
-// Tabellen-Header (magic exakt, abi_version/size mindestens auf dem
-// Contract-Stand des SDK).
-fn checkGroupTable(
-    ctx: *const r4os.r4sys.Context,
-    start: r4os.r4xstart.Context,
-    comptime group: r4os.abi.R4LGroup,
-    comptime label: []const u8,
-    comptime Table: type,
-    magic: u32,
-    version: u32,
-    size: u32,
-    comptime slots: anytype,
-) bool {
-    const item = start.findImport(group) orelse return failCheck(ctx, label);
-    const ok = item.group_id == @intFromEnum(group) and
-        item.min_version == 1 and
-        item.resolved_version >= 1 and
-        (item.flags & r4os.abi.r4xstart_import_flag_group_interface) != 0 and
-        item.table != 0 and blk: {
-        const table: *const Table = @ptrFromInt(item.table);
-        var table_ok = table.magic == magic and
-            table.abi_version >= version and
-            table.size >= size;
-        inline for (slots) |slot| {
-            if (slot.state != .function) table_ok = table_ok and @field(table.*, slot.name) == 0;
-        }
-        break :blk table_ok;
-    };
-    printCheck(ctx, label, ok);
+// Actual Query2 import admission, exact generated header and reserved slots.
+// Independent functional V1 interfaces below remain separate from this ABI.
+fn checkGroupTable(ctx: *const r4os.r4sys.Context, start: r4os.platform2.Context,
+    comptime group: r4os.abi.R4LGroup, comptime module: []const u8,
+    comptime Table: type) bool {
+    const item = start.findImportNamed(module, "Query2") orelse return failCheck(ctx, module);
+    const expected: Table = .{};
+    const ok = item.group_id == @intFromEnum(group) and item.min_version == 2 and item.resolved_version == 2 and
+        item.flags & r4os.abi.r4xstart_import_flag_group_interface != 0 and item.table != 0 and
+        item.table % @alignOf(Table) == 0 and blk: {
+            const table: *const Table = @ptrFromInt(item.table);
+            var valid = table.magic == expected.magic and table.abi_version >= expected.abi_version and table.size >= @sizeOf(Table);
+            inline for (@import("std").meta.fields(Table)) |field| {
+                if (comptime @import("std").mem.startsWith(u8, field.name, "reserved")) valid = valid and @field(table.*, field.name) == 0;
+            }
+            break :blk valid;
+        };
+    printCheck(ctx, module ++ " Query2 group table", ok);
     return ok;
 }
 
-fn checkR4XStartImports(ctx: *const r4os.r4sys.Context, start: r4os.r4xstart.Context) bool {
-    const context_ok = start.valid();
-    printCheck(ctx, "R4XStart import context", context_ok);
-    if (!context_ok) return false;
-
-    // 0.57.6: Vertragstest fuer ALLE 6 Kernel-Gruppentabellen (vorher
-    // nur R4SYS/R4DEV; 0.56.41 fuehrte die Tabellen fuer alle ein).
-    const abi = r4os.abi;
-    const sys_ok = checkGroupTable(ctx, start, .r4sys, "R4XStart R4SYS group table", abi.R4XStartR4Sys, abi.r4xstart_r4sys_magic, abi.r4xstart_r4sys_version, abi.r4xstart_r4sys_size, abi.R4SysSlots);
-    const sys_resolve_ok = start.r4sys() != null;
-    printCheck(ctx, "R4XStart R4SYS context resolve", sys_resolve_ok);
-    const desk_ok = checkGroupTable(ctx, start, .r4desk, "R4XStart R4DESK group table", abi.R4XStartR4Desk, abi.r4xstart_r4desk_magic, abi.r4xstart_r4desk_version, abi.r4xstart_r4desk_size, abi.R4DeskSlots);
-    const draw_ok = checkGroupTable(ctx, start, .r4draw, "R4XStart R4DRAW group table", abi.R4XStartR4Draw, abi.r4xstart_r4draw_magic, abi.r4xstart_r4draw_version, abi.r4xstart_r4draw_size, abi.R4DrawSlots);
-    const net_ok = checkGroupTable(ctx, start, .r4net, "R4XStart R4NET group table", abi.R4XStartR4Net, abi.r4xstart_r4net_magic, abi.r4xstart_r4net_version, abi.r4xstart_r4net_size, abi.R4NetSlots);
-    const audio_ok = checkGroupTable(ctx, start, .r4audio, "R4XStart R4AUDIO group table", abi.R4XStartR4Audio, abi.r4xstart_r4audio_magic, abi.r4xstart_r4audio_version, abi.r4xstart_r4audio_size, abi.R4AudioSlots);
-    const dev_ok = checkGroupTable(ctx, start, .r4dev, "R4XStart R4DEV group table", abi.R4XStartR4Dev, abi.r4xstart_r4dev_magic, abi.r4xstart_r4dev_version, abi.r4xstart_r4dev_size, abi.R4DevSlots);
-
-    return sys_ok and sys_resolve_ok and desk_ok and draw_ok and net_ok and audio_ok and dev_ok;
+fn checkR4XStartImports(ctx: *const r4os.r4sys.Context, start: r4os.platform2.Context) bool {
+    const checked = r4os.platform2.Context.init(start.raw) catch return failCheck(ctx, "R4XStart2 import context");
+    printCheck(ctx, "R4XStart2 import context", true);
+    const a = r4os.platform2.abi;
+    const sys_ok = checkGroupTable(ctx, checked, .r4sys, "R4SYS", a.R4XStartR4Sys2);
+    const desk_ok = checkGroupTable(ctx, checked, .r4desk, "R4DESK", a.R4XStartR4Desk2);
+    const draw_ok = checkGroupTable(ctx, checked, .r4draw, "R4DRAW", a.R4XStartR4Draw2);
+    const net_ok = checkGroupTable(ctx, checked, .r4net, "R4NET", a.R4XStartR4Net2);
+    const audio_ok = checkGroupTable(ctx, checked, .r4audio, "R4AUDIO", a.R4XStartR4Audio2);
+    const dev_ok = checkGroupTable(ctx, checked, .r4dev, "R4DEV", a.R4XStartR4Dev2);
+    const resolved = checked.system() != null;
+    printCheck(ctx, "R4XStart2 R4SYS context resolve", resolved);
+    return sys_ok and resolved and desk_ok and draw_ok and net_ok and audio_ok and dev_ok;
 }
 
-fn checkNamedRuntimeR4L(ctx: *const r4os.r4sys.Context, start: r4os.r4xstart.Context) bool {
+fn checkNamedRuntimeR4L(ctx: *const r4os.r4sys.Context, start: r4os.platform2.Context) bool {
     const item = start.findImportNamed("EXTMATH", "API_V1") orelse return failCheck(ctx, "Runtime-R4L named import");
     const transport_ok = item.group_id == 0 and
         item.min_version == 1 and
@@ -749,14 +729,12 @@ fn checkStressR4XStarts(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.C
 }
 
 fn findInstanceTaskId(ctx: *const r4os.r4sys.Context, wanted_id: u32) ?u32 {
-    var instance_index: u32 = 0;
-    while (true) {
-        var info: r4os.abi.ProgramInstanceInfo = .{};
-        if (ctx.programInstance(instance_index, &info) <= 0) return null;
-        if (info.id == wanted_id and info.task_id != 0) return info.task_id;
-        if (instance_index == 0xFFFF_FFFF) return null;
-        instance_index += 1;
-    }
+    var handle: r4os.abi.ProgramProcessHandle = .{};
+    if (ctx.programOpenHandle(wanted_id, &handle) != r4os.abi.program_handle_ok) return null;
+    var info: r4os.abi.ProgramInstanceInfo = .{};
+    if (ctx.programHandleStatus(&handle, &info) != r4os.abi.program_handle_ok or
+        info.id != wanted_id or info.task_id == 0) return null;
+    return info.task_id;
 }
 
 fn taskIdPresent(dev: *const r4os.r4dev.Context, task_count: u32, wanted_id: u32) bool {

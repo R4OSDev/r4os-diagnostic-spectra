@@ -7,7 +7,7 @@ const App = struct {
     sys: r4os.r4sys.Context,
     dev: r4os.r4dev.Context,
 
-    fn init(r4_app: *r4os.App) ?App {
+    fn init(r4_app: *r4os.App2) ?App {
         return .{
             .sys = r4_app.system(),
             .dev = r4_app.devicesLowLevel() orelse return null,
@@ -534,15 +534,11 @@ const App = struct {
     fn testMemoryProfiles(self: *App) bool {
         if (!self.sys.base.hasDevFn("memory_summary")) return self.failBool("R4X memory profile API missing");
         var info: r4os.abi.ProgramInstanceInfo = .{};
-        var found = false;
-        var index: u32 = 0;
-        while (self.sys.programInstance(index, &info) > 0) : (index += 1) {
-            if (info.id == self.sys.base.bundle.?.raw.instance_id) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) return self.failBool("SPECTRA memory profile instance missing");
+        var caller: r4os.abi.ProgramJoinHandle = .{};
+        if (self.sys.threadCurrentHandle(&caller) != r4os.abi.thread_ok) return self.failBool("SPECTRA memory profile identity missing");
+        const handle: r4os.abi.ProgramProcessHandle = .{ .instance_id = caller.instance_id, .generation = caller.instance_generation };
+        if (self.sys.programHandleStatus(&handle, &info) != r4os.abi.program_handle_ok or
+            info.id != self.sys.base.generation2.?.raw.instance_id) return self.failBool("SPECTRA memory profile instance missing");
 
         const profile_ok = info.memory_profile == r4os.abi.memory_profile_workstation and
             info.memory_reserved_limit >= 1024 * 1024 * 1024 and
@@ -869,7 +865,7 @@ const App = struct {
     }
 };
 
-pub fn r4_app_main(r4_app: *r4os.App) i32 {
+pub fn r4_app_main(r4_app: *r4os.App2) i32 {
     var app = App.init(r4_app) orelse return r4os.abi.err_no_group;
     return app.run();
 }

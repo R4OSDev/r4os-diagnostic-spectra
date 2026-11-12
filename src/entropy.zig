@@ -22,7 +22,7 @@ var job: struct {
     grant_result: i32 = 0,
 } = .{};
 
-pub fn collect(app: *r4os.App, out: *Output) bool {
+pub fn collect(app: *r4os.App2, out: *Output) bool {
     var info: a.EntropySourceInfo = .{};
     const source = app.lowLevel();
     const rc = source.entropySourceInfo(&info);
@@ -102,7 +102,7 @@ fn worker(raw: u64) callconv(.c) i32 {
     }
     return if (gate.load(.acquire) == 1) cases(@intCast(raw)) else 10;
 }
-pub fn run(app: *r4os.App, out: *Output, absent: bool) i32 {
+pub fn run(app: *r4os.App2, out: *Output, absent: bool) i32 {
     sys = app.system();
     dev = app.devicesLowLevel() orelse return 2;
     context = app.lowLevel();

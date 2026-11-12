@@ -19,7 +19,7 @@ fn fail(sys: *r4os.r4sys.Context, message: []const u8) i32 {
     sys.println(message);
     return 1;
 }
-pub fn run(app: *r4os.App) i32 {
+pub fn run(app: *r4os.App2) i32 {
     var sys = app.system();
     child_sys = sys;
     if (same(app.args(), "/EXHAUSTMAIN")) return child(&sys, false);

@@ -49,10 +49,21 @@ fn loadRun(allocator: std.mem.Allocator, sys: *const r4os.r4sys.Context, path: [
     const suffix = "\\RUN.JSON";
     if (!std.mem.startsWith(u8, path, prefix) or path.len != prefix.len + 36 + suffix.len or
         !std.mem.endsWith(u8, path, suffix)) return error.InvalidRunPath;
-    const info = sys.fileInfo(path) orelse return error.RunMissing;
-    if (info.is_dir != 0 or info.size == 0 or info.size > max_run_bytes) return error.RunSize;
-    const bytes = try allocator.alloc(u8, @intCast(info.size));
-    if (sys.fileRead(path, bytes) != info.size) return error.RunRead;
+    const absolute = try r4os.AbsoluteFilePath.parse(path);
+    const files: r4os.app_storage.Files = .{ .sys = sys.* };
+    const info = switch (files.metadata(absolute.asZ())) {
+        .found => |value| value,
+        .missing => return error.RunMissing,
+        .failure => return error.RunRead,
+    };
+    const size = r4os.metadata2.fileSize(&info) orelse return error.RunSize;
+    if (info.flags & r4os.abi.file_metadata2_flag_directory != 0 or size == 0 or size > max_run_bytes) return error.RunSize;
+    const bytes = try allocator.alloc(u8, @intCast(size));
+    const read = switch (files.readDocumentPrefix(absolute.asZ(), bytes, .{ .kind = r4os.abi.timeout_kind_finite, .nanoseconds = timeout_ns })) {
+        .value => |value| value,
+        .failure => return error.RunRead,
+    };
+    if (read.bytes != size or read.file_size != size) return error.RunRead;
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
     const found = std.fmt.bytesToHex(digest, .lower);
@@ -79,19 +90,21 @@ const Response = struct {
         return .accept;
     }
 };
-const FileSource = struct {
-    sys: r4os.r4sys.Context,
-    path: [:0]const u8,
+const RunSource = struct {
+    // The hash, JSON admission and every transmitted byte refer to this
+    // same complete immutable snapshot, held until transport retirement.
+    bytes: []const u8,
     fn read(raw: ?*anyopaque, offset: u64, output: []u8) i64 {
         const self: *@This() = @ptrCast(@alignCast(raw orelse return -3));
-        if (offset > std.math.maxInt(u32)) return -3;
-        const count = self.sys.fileReadAt(self.path, @intCast(offset), output);
-        return if (count < 0) -3 else count;
+        if (offset > self.bytes.len) return -3;
+        const count = @min(output.len, self.bytes.len - @as(usize, @intCast(offset)));
+        @memcpy(output[0..count], self.bytes[@intCast(offset)..][0..count]);
+        return @intCast(count);
     }
 };
 
-fn putRun(allocator: std.mem.Allocator, web: *r4os.app_web.WebTransport, sys: *const r4os.r4sys.Context, address: []const u8, headers: []const u8, path: [:0]const u8, length: u64, response_bytes: []u8) !Value {
-    var source = FileSource{ .sys = sys.*, .path = path };
+fn putRun(allocator: std.mem.Allocator, web: *r4os.app_web.WebTransport, sys: *const r4os.r4sys.Context, address: []const u8, headers: []const u8, bytes: []const u8, response_bytes: []u8) !Value {
+    var source = RunSource{ .bytes = bytes };
     var response = Response{ .bytes = response_bytes };
     var response_headers: [r4os.http.max_header_bytes]u8 = undefined;
     var io: [16 * 1024]u8 = undefined;
@@ -101,19 +114,25 @@ fn putRun(allocator: std.mem.Allocator, web: *r4os.app_web.WebTransport, sys: *c
     const timeout = r4os.time_contract.timeoutFinite(r4os.time_contract.durationFromNanoseconds(timeout_ns));
     var report = stream.init(web, address, .{ .headers = &response_headers, .io = &io, .upload = &upload_buffer, .tls = &tls }, .{ .context = &response, .write = Response.write }, .{
         .request = .{ .method = .put, .redirect = .manual, .timeout = timeout, .headers = headers, .content_type = "application/json" },
-        .request_length = length,
-        .reader = FileSource.read,
+        .request_length = bytes.len,
+        .reader = RunSource.read,
         .reader_context = &source,
     });
     defer {
-        if (!stream.canRelease()) _ = stream.close(timeout);
+        // This synchronous command has no background owner to inherit a
+        // pending Close. Keep the snapshot, callbacks and transport buffers
+        // alive until the real socket is retired, including on errors.
+        // Only disposal is retried here; no request or body is replayed.
+        while (!stream.canRelease()) {
+            if (!stream.close(timeout)) sys.sleepTicks(1);
+        }
         std.crypto.secureZero(u8, &stream.headers);
     }
     if (report.state == .failed or report.state == .cancelled) return error.UploadTransport;
     while (report.state == .ready or report.state == .paused) report = stream.run();
     const closed = stream.canRelease() or stream.close(timeout);
     try requireStatus(sys, "PUT", report.status orelse 0, 200, 201);
-    if (report.state != .complete or !report.http_complete or !closed or report.request_body_confirmed != length) return error.UploadIncomplete;
+    if (report.state != .complete or !report.http_complete or !closed or report.request_body_confirmed != bytes.len) return error.UploadIncomplete;
     const parsed = try std.json.parseFromSlice(Value, allocator, response.bytes[0..response.len], .{ .allocate = .alloc_always });
     return parsed.value;
 }
@@ -124,7 +143,7 @@ fn verifyClaim(value: Value, id: []const u8, hash: []const u8) !void {
     const binding = field(value, "identity") orelse return error.ClaimMismatch;
     if (!same(host, "host_id", id) or !same(binding, "method", identity_api.method) or !same(binding, "hash", hash)) return error.ClaimMismatch;
 }
-fn run(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8, phase: *[]const u8) !void {
+fn run(app: *r4os.App2, path: [:0]const u8, expected_sha: ?[]const u8, phase: *[]const u8) !void {
     const sys = app.system();
     var arena = std.heap.ArenaAllocator.init(sys.allocator());
     defer arena.deinit();
@@ -198,7 +217,7 @@ fn run(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8, phase: *[]
     var run_url_buf: [200]u8 = undefined;
     const run_url = try url(&run_url_buf, target.target_ip, target.port, "benchmark-runs", id);
     var put_body: [8192]u8 = undefined;
-    const put = try putRun(allocator, &web, &sys, run_url, headers, path, local.bytes.len, &put_body);
+    const put = try putRun(allocator, &web, &sys, run_url, headers, local.bytes, &put_body);
     if (!isTrue(put, "stored") or !same(put, "run_id", id) or field(put, "score_validation") == null or
         (scoring_api.applicable(local.doc) and field(put, "server_scoring") == null)) return error.PutMismatch;
 
@@ -262,7 +281,7 @@ fn run(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8, phase: *[]
 
 pub const Report = struct { exit_code: i32 = 0, phase: []const u8 = "preflight", error_name: ?[]const u8 = null };
 
-pub fn validateLocal(app: *r4os.App, path: [:0]const u8, expected_sha: []const u8) !void {
+pub fn validateLocal(app: *r4os.App2, path: [:0]const u8, expected_sha: []const u8) !void {
     const sys = app.system();
     var arena = std.heap.ArenaAllocator.init(sys.allocator());
     defer arena.deinit();
@@ -271,13 +290,13 @@ pub fn validateLocal(app: *r4os.App, path: [:0]const u8, expected_sha: []const u
     if (!std.mem.eql(u8, string(local.doc, "host_id") orelse return error.InvalidRun, &identity.host_id)) return error.WrongPhysicalHost;
 }
 
-pub fn uploadWithReport(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8) Report {
+pub fn uploadWithReport(app: *r4os.App2, path: [:0]const u8, expected_sha: ?[]const u8) Report {
     var phase: []const u8 = "preflight";
     run(app, path, expected_sha, &phase) catch |err| return .{ .exit_code = 1, .phase = phase, .error_name = @errorName(err) };
     return .{ .phase = phase };
 }
 
-pub fn upload(app: *r4os.App, path: [:0]const u8, expected_sha: ?[]const u8) i32 {
+pub fn upload(app: *r4os.App2, path: [:0]const u8, expected_sha: ?[]const u8) i32 {
     const report = uploadWithReport(app, path, expected_sha);
     if (report.error_name) |reason| {
         const sys = app.system();

@@ -117,7 +117,7 @@ fn checkIfAndInvalid() !void {
     invalid.day = 30;
     if (shared.sys.timeSetState(&invalid) != -1 or !matches(shared.sys.timeState(), first)) return error.InvalidChangedTime;
 }
-pub fn child(app: *r4os.App) i32 {
+pub fn child(app: *r4os.App2) i32 {
     const sys = app.system();
     const start = sys.monotonicNanoseconds() orelse return fail(&sys, "no monotonic clock");
     shared = .{ .sys = sys, .deadline = start + 10_000_000_000 };
@@ -177,9 +177,9 @@ fn restore(sys: *const r4os.r4sys.Context, original: a.TimeState, started: u64) 
         sys.sleepTicks(@max(1, sys.ticksFromMilliseconds(1)));
     }
 }
-pub fn parent(app: *r4os.App) i32 {
+pub fn parent(app: *r4os.App2) i32 {
     const sys = app.system();
-    if (!r4std.init(app.startContext())) return fail(&sys, "R4STD unavailable");
+    if (!r4std.init2(app.startContext())) return fail(&sys, "R4STD unavailable");
     var capacity: a.CpuCapacity = .{};
     if (sys.cpuCapacity(&capacity) != a.thread_ok or capacity.available_cpus < 4) return fail(&sys, "requires four admitted CPUs");
     const original = sys.timeState();

@@ -9,7 +9,7 @@ const checks = @import("checks.zig");
 var output: Output = undefined;
 var request: cli.Request = undefined;
 
-pub fn r4_app_main(app: *r4os.App) i32 {
+pub fn r4_app_main(app: *r4os.App2) i32 {
     const launcher = @import("standard_launch.zig");
     const raw = app.args();
     if (std.mem.eql(u8, raw, @import("remote_frame_check.zig").child_argument)) return @import("remote_frame_check.zig").child(app);
@@ -88,12 +88,19 @@ pub fn r4_app_main(app: *r4os.App) i32 {
                 if (rc != 0) result = rc;
                 output.flush();
                 if (i + 1 < request.count) {
-                    var remaining = request.interval_ms;
-                    while (remaining != 0 and !app.system().programShouldClose()) {
-                        const step: u32 = @min(remaining, 100);
-                        app.system().sleepTicks(@max(1, (@as(u64, step) * app.system().monotonicHz() + 999) / 1000));
-                        remaining -= step;
+                    const clock = app.clock() catch { result = 1; break; };
+                    var budget = r4os.rpc_budget.Budget.fromTimeout(clock.read, .{
+                        .kind = r4os.abi.timeout_kind_finite,
+                        .nanoseconds = @as(u64, request.interval_ms) * 1_000_000,
+                    }) catch { result = 1; break; };
+                    while (!app.system().programShouldClose()) {
+                        const ticks = budget.remainingTicks() catch |err| {
+                            if (err != error.TimedOut) result = 1;
+                            break;
+                        };
+                        app.system().sleepTicks(@min(ticks, @max(1, app.system().ticksFromMilliseconds(100))));
                     }
+                    if (result != 0) break;
                 }
             }
         },

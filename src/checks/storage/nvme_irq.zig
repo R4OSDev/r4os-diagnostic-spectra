@@ -43,7 +43,7 @@ fn busy(r: Report) bool {
 fn unavailable(r: Report) bool {
     return r.status == abi.kernel_nvme_check_status_unavailable and r.unavailable_reason != 0 and clean(r) and r.tasks_created == r.tasks_reaped;
 }
-pub fn run(app: *r4os.App, args: []const u8, out: *Output) i32 {
+pub fn run(app: *r4os.App2, args: []const u8, out: *Output) i32 {
     if (!cli.same(args, "/NVMEIRQ")) {
         out.unavailable("storage", "use CHECK STORAGE /NVMEIRQ");
         return 2;

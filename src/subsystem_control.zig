@@ -37,7 +37,7 @@ pub const Window = struct {
 };
 
 pub const Controller = struct {
-    app: *r.App,
+    app: *r.App2,
     ctx: Context,
     check: Check,
     assoc: r4std.app_assoc.Config = .{},
@@ -69,8 +69,8 @@ pub const Controller = struct {
     pub const headlessSubsystemLaunchFailure = scenes.headlessSubsystemLaunchFailure;
     pub const waitForHeadlessSubsystemAudio = scenes.waitForHeadlessSubsystemAudio;
 
-    pub fn init(app: *r.App, out: *Output, require_basic_fixtures: bool) !Controller {
-        if (!r4std.init(app.startContext())) return error.StandardLibrary;
+    pub fn init(app: *r.App2, out: *Output, require_basic_fixtures: bool) !Controller {
+        if (!r4std.init2(app.startContext())) return error.StandardLibrary;
         const sys = app.system();
         // The targeted SNES acceptance never opens these BASIC fixtures.
         // Full subsystem acceptance still requires every original prerequisite.
@@ -325,16 +325,32 @@ pub const Controller = struct {
             self.check.out.record("gui-event-refusal", "SUBSYSTEM", index, .{ .stage = @as([]const u8, "desktop-api"), .handle = handle, .event = value });
             return false;
         };
-        for (0..4) |attempt| {
+        const clock = self.app.clock() catch return false;
+        // -3 accepts no event while the target drains a reliable input-reset
+        // barrier (or a full queue). Yielding four times can finish before it
+        // runs at all. Keep one finite admission budget and exact incarnation;
+        // the original scenario work/completion deadlines stay unchanged.
+        var budget = r.rpc_budget.Budget.fromTimeout(clock.read, .{
+            .kind = r.abi.timeout_kind_finite,
+            .nanoseconds = 3_000_000_000,
+        }) catch return false;
+        var attempt: u32 = 0;
+        while (true) : (attempt +|= 1) {
+            self.check.checkDeadline() catch return false;
+            var current: r.abi.ProgramInstanceInfo = .{};
+            if (self.ctx.sys.programHandleStatus(&handle, &current) != 0 or
+                current.window_id != info.window_id or
+                (current.state != @intFromEnum(r.abi.ProgramInstanceState.running) and
+                    current.state != @intFromEnum(r.abi.ProgramInstanceState.close_requested))) return false;
             const rc = desk.guiPushEvent(handle.instance_id, &value);
             if (rc == 0) return true;
-            if (rc != -3 or attempt == 3) {
+            const remaining = budget.remainingTicks() catch 0;
+            if (rc != -3 or remaining == 0) {
                 self.check.out.record("gui-event-refusal", "SUBSYSTEM", index, .{ .stage = @as([]const u8, "push"), .handle = handle, .state = info.state, .window = info.window_id, .event = value, .attempt = attempt, .raw = rc, .last_window_id = self.windows[index].actual_id, .last_frame_valid = self.windows[index].frame_valid });
                 return false;
             }
-            self.ctx.sleepTicks(0);
+            self.ctx.sleepTicks(@min(remaining, @max(1, self.ctx.sys.ticksFromMilliseconds(1))));
         }
-        return false;
     }
 };
 

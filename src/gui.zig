@@ -9,7 +9,7 @@ const fg: u32 = 0xEEEEEE;
 const palette = r4os.gui.Palette{ .text = fg, .disabled_text = 0x707070, .face = 0x181818, .face_light = 0x909090, .face_shadow = 0x080808, .client_bg = bg, .select_bg = 0x283D70, .select_text = 0xFFFFFF, .title_bg = 0x181818, .title_text = fg };
 const Press = enum { none, start, upload };
 const View = struct {
-    app: *r4os.App,
+    app: *r4os.App2,
     sys: r4os.r4sys.Context,
     desk: r4os.r4desk.Context,
     draw: r4os.r4draw.Context,
@@ -273,7 +273,7 @@ const View = struct {
     }
 };
 var view: View = undefined;
-pub fn run(app: *r4os.App) i32 {
+pub fn run(app: *r4os.App2) i32 {
     const desk = app.desktop() orelse {
         app.system().println("SPECTRA /GUI requires an explicit Desktop GUI launch.");
         return 2;

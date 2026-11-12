@@ -6,7 +6,7 @@ const Output = @import("output.zig").Output;
 const Controller = @import("subsystem_control.zig").Controller;
 const Host = @import("desktop_host_check.zig").Owner;
 
-pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
+pub fn run(app: *r.App2, args: []const u8, out: *Output) i32 {
     var own_host = false;
     var snes_only = false;
     var options = std.mem.tokenizeAny(u8, args, " \t");

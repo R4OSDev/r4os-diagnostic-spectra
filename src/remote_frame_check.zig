@@ -6,14 +6,14 @@ const Output = @import("output.zig").Output;
 pub const child_argument = "/REMOTEFRAME-EXIT-CHILD";
 const executable = "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\SPECTRA.R4X";
 
-pub fn child(app: *r.App) i32 {
+pub fn child(app: *r.App2) i32 {
     const sys = app.system();
     const desk = app.desktop() orelse return 1;
     const result = oracle.run(&sys, &desk, true);
     return result.exit_code;
 }
 
-pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
+pub fn run(app: *r.App2, args: []const u8, out: *Output) i32 {
     const exit_owned = std.ascii.eqlIgnoreCase(args, "/EXITOWNED");
     if (args.len != 0 and !exit_owned) return 2;
     @import("check_context.zig").emit(app, out, "REMOTEFRAME");

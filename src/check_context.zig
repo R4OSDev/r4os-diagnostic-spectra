@@ -1,7 +1,7 @@
 //! Identity/clock scope for explicit work; no new clock or instrumentation.
 const r = @import("r4os");
 const Output = @import("output.zig").Output;
-pub fn emit(app: *r.App, out: *Output, group: []const u8) void {
+pub fn emit(app: *r.App2, out: *Output, group: []const u8) void {
     const sys = app.system();
     var clock: r.abi.MonotonicClockInfo = .{};
     const status = sys.monotonicClock(&clock);

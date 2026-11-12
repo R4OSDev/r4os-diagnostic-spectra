@@ -38,7 +38,7 @@ fn busy(r: Report) bool {
     return r.status == abi.kernel_block_queue_check_status_busy and r.run_id == 0 and r.flags == 0 and r.tasks_created == 0 and r.tasks_reaped == 0 and r.retained_task_count == 0 and r.controllers_registered == 0 and r.controllers_unregistered == 0 and r.retained_controller_count == 0 and r.async_submissions == 0 and r.retained_request_count == 0 and r.retained_buffer_count == 0;
 }
 const Admission = @import("../admission.zig").Probe(Report, invoke, passed, busy);
-pub fn run(app: *r4os.App, args: []const u8, out: *Output) i32 {
+pub fn run(app: *r4os.App2, args: []const u8, out: *Output) i32 {
     const admission = cli.same(args, "/BLOCKQUEUE:ADMISSION");
     if (!admission and !cli.same(args, "/BLOCKQUEUE")) {
         out.unavailable("storage", "use CHECK STORAGE /BLOCKQUEUE[:ADMISSION]");

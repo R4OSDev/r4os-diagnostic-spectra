@@ -8,7 +8,7 @@ const scene = @import("desktop_check");
 const service_path = "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\SVCAPPD.R4X";
 const image = "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\SPECTRA.R4X";
 
-pub fn run(check: anytype, app: *r.App) !void {
+pub fn run(check: anytype, app: *r.App2) !void {
     var sys = check.sys;
     var slow: a.ServiceInfo = .{};
     if (sys.serviceStatus("SVCSTALL", &slow) != a.service_api_result_not_found) return error.LaunchFixtureAlreadyPresent;

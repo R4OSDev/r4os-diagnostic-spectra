@@ -12,7 +12,7 @@ pub fn Probe(comptime Report: type, comptime invoke: anytype, comptime passed: a
             peer_valid = invoke(&shared_dev, &peer_report);
             return 0;
         }
-        pub fn run(app: *r4os.App, dev: *const r4os.r4dev.Context, out: *Output, kind: []const u8, group: []const u8, success: []const u8) i32 {
+        pub fn run(app: *r4os.App2, dev: *const r4os.r4dev.Context, out: *Output, kind: []const u8, group: []const u8, success: []const u8) i32 {
             shared_dev = dev.*; peer_report = .{}; peer_valid = false;
             @atomicStore(u8, &peer_started, 0, .release);
             var worker = switch (app.resources().createThread(peer, 0, 0)) {

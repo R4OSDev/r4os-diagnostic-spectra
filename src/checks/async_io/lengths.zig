@@ -10,7 +10,8 @@ const max_count: u64 = std.math.maxInt(i32);
 const Op = enum { read, read_at, write, append, write_at, stream_write };
 
 fn api(sys: *const r4os.r4sys.Context, comptime name: []const u8) @field(a.R4SysFns, name) {
-    return @ptrFromInt(@field(sys.base.bundle.?.sys.?.*, name));
+    const context = sys.base.generation2 orelse unreachable;
+    return r4os.platform2.abi.function(r4os.platform2.abi.R4SysFns2, context.system(), name) orelse unreachable;
 }
 fn fail(sys: *r4os.r4sys.Context, message: []const u8) i32 {
     sys.print("SPECTRA ASYNC_IO lengths FAILED: ");
@@ -48,7 +49,7 @@ fn waitResult(sys: *r4os.r4sys.Context, id: u32, expected: i32, requested: u64) 
         info.requested_bytes == requested and info.processed_bytes == 0;
 }
 
-pub fn run(app: *r4os.App) i32 {
+pub fn run(app: *r4os.App2) i32 {
     var sys = app.system();
     inline for (.{ "io_file_read", "io_file_read_at", "io_file_write", "io_file_append", "io_file_write_at", "io_file_stream_write", "file_read", "file_read_at", "file_write", "file_append", "file_stream_write", "file_stream_begin", "file_stream_finish", "file_stream_abort", "io_wait", "io_close" }) |name| {
         if (!sys.hasFn(name)) return fail(&sys, "ABI function unavailable");

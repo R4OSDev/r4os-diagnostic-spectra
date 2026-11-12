@@ -133,10 +133,10 @@ fn worker(raw: u64) callconv(.c) i32 {
     };
     return 0;
 }
-pub fn run(app: *r4os.App, out: *Output) i32 {
+pub fn run(app: *r4os.App2, out: *Output) i32 {
     sys = app.system();
     dev = app.devicesLowLevel() orelse return 2;
-    if (!r4std.init(app.raw)) return 2;
+    if (!r4std.init2(app.raw)) return 2;
     var first: a.CpuAccelerationInfo = .{};
     if (dev.cpuAccelerationInfo(&first) != 0 or first.configured_cpus == 0 or first.configured_cpus > 64) return 2;
     var created: u32 = 0;

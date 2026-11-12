@@ -47,7 +47,7 @@ fn busy(r: Report) bool {
         r.retained_range_count == 0 and r.retained_allocation_count == 0;
 }
 const Admission = @import("admission.zig").Probe(Report, invoke, passed, busy);
-pub fn run(app: *r4os.App, args: []const u8, out: *Output) i32 {
+pub fn run(app: *r4os.App2, args: []const u8, out: *Output) i32 {
     if (cli.same(args, "/POWER")) return @import("cpu_power.zig").run(app, out);
     if (cli.same(args, "/FEATURES") or std.ascii.startsWithIgnoreCase(args, "/FEATURES-OFFLINE:")) return @import("cpu_capabilities.zig").run(app, args, out);
     if (cli.same(args, "/MCA")) return @import("../mca.zig").check(app, out);

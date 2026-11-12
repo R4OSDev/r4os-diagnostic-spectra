@@ -240,7 +240,7 @@ fn offline(index: u32, out: *Output) i32 {
     out.message("smp", if (ok) "SPECTRA CPU capabilities offline: ok (passive data, no register instruction)" else "SPECTRA CPU capabilities offline: FAILED", false);
     return if (ok) 0 else 1;
 }
-pub fn run(app: *r4os.App, args: []const u8, out: *Output) i32 {
+pub fn run(app: *r4os.App2, args: []const u8, out: *Output) i32 {
     sys = app.system();
     dev = app.devicesLowLevel() orelse return 2;
     inline for ([_][]const u8{ "cpu_capabilities", "cpu_feature", "cpu_register_read", "kernel_cpu_register_check", "cpu_topology" }) |name|

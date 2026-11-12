@@ -42,7 +42,7 @@ const App = struct {
     sys: r4os.r4sys.Context,
     dev: r4os.r4dev.Context,
 
-    fn init(r4_app: *r4os.App) ?App {
+    fn init(r4_app: *r4os.App2) ?App {
         return .{
             .sys = r4_app.system(),
             .dev = r4_app.devicesLowLevel() orelse return null,
@@ -78,6 +78,25 @@ const App = struct {
             self.sys.println("SPECTRA STORAGE globalReclaim: FAILED performance unavailable");
             return false;
         };
+        // A generic one-frame request may legitimately reclaim a cached
+        // kernel task stack first. Keep its exact oracle below, and obtain
+        // a separate real file-cache receipt before checking that domain.
+        var fs_returned_frames: u64 = reclaim_probe.fs_returned_frames;
+        var fs_returned_bytes: u64 = reclaim_probe.fs_returned_bytes;
+        var attempts: u32 = 0;
+        while (fs_returned_frames == 0 and attempts < 8) : (attempts += 1) {
+            const receipt = self.dev.memoryReclaimProbe(64) orelse return false;
+            if (receipt.reason != r4os.abi.memory_reclaim_reason_diagnostic or
+                receipt.requested_frames != 64 or receipt.returned_frames == 0 or
+                receipt.failed_drains != 0) return false;
+            fs_returned_frames += receipt.fs_returned_frames;
+            fs_returned_bytes += receipt.fs_returned_bytes;
+        }
+        const fs_reclaim_summary = self.dev.performanceSummary() orelse return false;
+        const fs_receipt_ok = fs_returned_frames > 0 and
+            fs_returned_bytes >= fs_returned_frames * @as(u64, summary.fs_cache_payload_frame_bytes) and
+            fs_reclaim_summary.fs_cache_reclaim_returned_frames >= summary.fs_cache_reclaim_returned_frames + fs_returned_frames and
+            fs_reclaim_summary.fs_cache_reclaim_returned_bytes >= summary.fs_cache_reclaim_returned_bytes + fs_returned_bytes;
         const missing_backing = self.dev.memoryBackingStoreProbe(missing_backing_store_path, backing_store_bytes, 0) orelse {
             self.sys.println("SPECTRA STORAGE backingStore: FAILED missing probe unavailable");
             return false;
@@ -387,14 +406,14 @@ const App = struct {
             summary.fs_cache_pmm_dirty_bytes == 0 and
             summary.fs_cache_payload_allocations > 0 and
             summary.fs_cache_payload_allocation_failures == 0 and
-            reclaim_summary.fs_cache_payload_releases > 0 and
-            reclaim_summary.fs_cache_reclaim_returned_frames > 0 and
-            reclaim_summary.fs_cache_reclaim_returned_bytes >= reclaim_summary.fs_cache_reclaim_returned_frames * @as(u64, summary.fs_cache_payload_frame_bytes) and
+            fs_reclaim_summary.fs_cache_payload_releases > 0 and
+            fs_reclaim_summary.fs_cache_reclaim_returned_frames > 0 and
+            fs_reclaim_summary.fs_cache_reclaim_returned_bytes >= fs_reclaim_summary.fs_cache_reclaim_returned_frames * @as(u64, summary.fs_cache_payload_frame_bytes) and
             summary.fs_cache_dirty_non_reclaimable_entries == summary.fs_cache_dirty_entries and
             summary.fs_cache_dirty_non_reclaimable_bytes == summary.fs_cache_dirty_bytes and
-            reclaim_summary.fs_cache_reclaim_scans > 0 and
-            reclaim_summary.fs_cache_reclaim_clean_entries > 0 and
-            reclaim_summary.fs_cache_reclaim_failed_drains == 0 and
+            fs_reclaim_summary.fs_cache_reclaim_scans > 0 and
+            fs_reclaim_summary.fs_cache_reclaim_clean_entries > 0 and
+            fs_reclaim_summary.fs_cache_reclaim_failed_drains == 0 and
             summary.fs_cache_pagefile_ready == 0 and
             pagefileBlockersOk(summary.fs_cache_pagefile_blockers) and
             summary.fs_cache_deferred_write_requests > 0 and
@@ -405,7 +424,7 @@ const App = struct {
             summary.fs_cache_write_errors == 0 and
             summary.fs_cache_writeback_errors == 0 and
             write_probe_ok and
-            global_reclaim_ok and
+            global_reclaim_ok and fs_receipt_ok and
             backing_store_ok and
             backing_slots_ok and
             pager_gates_ok and
@@ -672,7 +691,7 @@ const App = struct {
 
 };
 
-pub fn r4_app_main(app: *r4os.App) i32 {
+pub fn r4_app_main(app: *r4os.App2) i32 {
     var ctx = App.init(app) orelse return r4os.abi.err_no_group;
     const args = std.mem.trim(u8, app.args(), " \t");
     const require_nvme = std.ascii.eqlIgnoreCase(args, "/NVME");

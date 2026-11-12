@@ -137,7 +137,7 @@ fn checkText(ctx: *const r4os.r4sys.Context, files: *const r4os.Files, letter: u
     return report(ctx, label, got == expected.len and eql(small_buf[0..expected.len], expected));
 }
 
-pub fn r4_app_main(app: *r4os.App) i32 {
+pub fn r4_app_main(app: *r4os.App2) i32 {
     const ctx = app.system();
     const files = app.files() orelse return r4os.abi.err_no_fn;
 

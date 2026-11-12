@@ -16,7 +16,7 @@ fn windowCount(sys: *const r.r4sys.Context) !u32 {
     return snapshot.status.window_count;
 }
 
-pub fn run(app: *r.App, out: *Output) i32 {
+pub fn run(app: *r.App2, out: *Output) i32 {
     @import("check_context.zig").emit(app, out, "DESKTOP-CANCEL");
     const sys = app.system();
     if ((windowCount(&sys) catch 1) != 0) {

@@ -4,9 +4,9 @@ const r4os = @import("r4os");
 const cli = @import("cli.zig");
 const Output = @import("output.zig").Output;
 
-var adapted: r4os.App = undefined;
-var raw: r4os.abi.R4XStartContext = undefined;
-var table: r4os.abi.R4XStartR4Sys = undefined;
+var adapted: r4os.App2 = undefined;
+var raw: r4os.platform2.abi.R4XStartContext2 = undefined;
+var table: r4os.platform2.abi.R4XStartR4Sys2 = undefined;
 var imports: [32]r4os.abi.R4XStartImport = undefined;
 var arguments: [1024:0]u8 = undefined;
 var sink: *Output = undefined;
@@ -60,7 +60,7 @@ fn putc(byte: u8) callconv(.c) void {
     _ = write(&.{byte}, 1);
 }
 
-fn prepare(app: *r4os.App, args: [:0]const u8, out: *Output) bool {
+fn prepare(app: *r4os.App2, args: [:0]const u8, out: *Output) bool {
     if (args.len >= arguments.len or app.raw.import_count > imports.len) return false;
     @memcpy(arguments[0..args.len], args);
     arguments[args.len] = 0;
@@ -69,7 +69,7 @@ fn prepare(app: *r4os.App, args: [:0]const u8, out: *Output) bool {
     raw.args_len = args.len;
     adapted = app.*;
     adapted.raw = &raw;
-    adapted.bundle.raw = &raw;
+    adapted.context.raw = &raw;
     sink = out;
     line_length = 0;
     machine_continuation = false;
@@ -77,13 +77,13 @@ fn prepare(app: *r4os.App, args: [:0]const u8, out: *Output) bool {
     write_failed = 0;
     // Normal console checks retain their real output cost and timing.
     if (out.format == .json or out.path != null) {
-        const original = app.bundle.sys orelse return false;
+        const original = app.context.system() orelse return false;
         table = .{};
         const len = @min(@sizeOf(@TypeOf(table)), original.size);
         @memcpy(std.mem.asBytes(&table)[0..len], std.mem.asBytes(original)[0..len]);
         table.write = @intFromPtr(&write);
         table.putc = @intFromPtr(&putc);
-        adapted.bundle.sys = &table;
+        adapted.context.tables[0] = @intFromPtr(&table);
         const source: [*]const r4os.abi.R4XStartImport = @ptrFromInt(raw.imports);
         @memcpy(imports[0..raw.import_count], source[0..raw.import_count]);
         for (imports[0..raw.import_count]) |*item| if (item.group_id == @intFromEnum(r4os.abi.R4LGroup.r4sys)) {
@@ -94,7 +94,7 @@ fn prepare(app: *r4os.App, args: [:0]const u8, out: *Output) bool {
     return true;
 }
 
-pub fn run(app: *r4os.App, request: *const cli.Request, out: *Output) i32 {
+pub fn run(app: *r4os.App2, request: *const cli.Request, out: *Output) i32 {
     const group = request.group();
     var args_buffer: [1024:0]u8 = undefined;
     var args = request.args();

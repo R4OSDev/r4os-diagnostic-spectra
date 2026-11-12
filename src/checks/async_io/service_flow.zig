@@ -8,7 +8,7 @@ const slow = "SVCSTALL";
 const fast = "SVCAPPD";
 const slow_budget: u64 = 3000;
 
-pub fn run(app: *r4os.App) i32 {
+pub fn run(app: *r4os.App2) i32 {
     var sys = app.system();
     sys.println("SPECTRA ASYNC_IO service begin");
     var info: abi.ServiceInfo = .{};

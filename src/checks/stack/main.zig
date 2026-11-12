@@ -2,7 +2,7 @@ const r4os = @import("r4os");
 
 var checksum: u64 = 0;
 
-pub fn r4_app_main(r4_app: *r4os.App) i32 {
+pub fn r4_app_main(r4_app: *r4os.App2) i32 {
     if (@import("recovery.zig").requested(r4_app.args()))
         return @import("recovery.zig").run(r4_app);
     // This first large frame crosses the default initial commit in one call.

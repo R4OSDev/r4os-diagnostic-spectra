@@ -136,7 +136,7 @@ fn exercise(sys: *const r.r4sys.Context, desk: *const r.r4desk.Context, out: *Ou
     if (!close(sys, &child)) return error.ReplacementClose;
     out.record("explorer-navigation", "DESKTOP", @intFromBool(details), .{ .process = identity, .files = count_files * 2, .first_content = launched.content, .observed_phase = phase, .revision_before = before, .revision_after_input = after, .new_target = @as([]const u8, "D:\\"), .new_target_retained = true, .old_generation_replaced = true, .cooperative_close_and_desktop_reap = true, .physical_visibility = @as(?bool, null) });
 }
-pub fn run(app: *r.App, args: []const u8, out: *Output) i32 {
+pub fn run(app: *r.App2, args: []const u8, out: *Output) i32 {
     var own = false;
     var nav = false;
     var icons = false;

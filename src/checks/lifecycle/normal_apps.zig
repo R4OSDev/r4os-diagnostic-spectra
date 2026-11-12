@@ -28,8 +28,24 @@ const State = struct {
     }
     fn reap(self: *State, handle: *a.ProgramProcessHandle, expected: i32) bool {
         var done: a.ProgramProcessCompletion = .{};
-        if (self.sys.programHandleWait(handle, self.sys.ticksFromMilliseconds(8000), &done) != a.program_handle_ok or done.exit_code != expected) return false;
-        if (self.sys.programHandleReap(handle, &done) != a.program_handle_ok or done.exit_code != expected) return false;
+        const waited = self.sys.programHandleWait(handle, self.sys.ticksFromMilliseconds(8000), &done);
+        if (waited != a.program_handle_ok or done.exit_code != expected) {
+            self.sys.write("SPECTRA LIFECYCLE apps wait rc="); self.sys.printI32(waited);
+            self.sys.write(" exit="); self.sys.printI32(done.exit_code);
+            self.sys.write(" expected="); self.sys.printI32(expected); self.sys.println("");
+            if (waited == a.program_handle_ok) {
+                var output: [2048]u8 = undefined;
+                var got: u32 = 0;
+                if (self.sys.programCompletionRead(handle, 0, &output, &got) == a.program_handle_ok and got <= output.len) self.sys.write(output[0..got]);
+            }
+            return false;
+        }
+        const reaped = self.sys.programHandleReap(handle, &done);
+        if (reaped != a.program_handle_ok or done.exit_code != expected) {
+            self.sys.write("SPECTRA LIFECYCLE apps reap rc="); self.sys.printI32(reaped);
+            self.sys.write(" exit="); self.sys.printI32(done.exit_code); self.sys.println("");
+            return false;
+        }
         handle.* = .{};
         return true;
     }

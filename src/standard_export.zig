@@ -111,11 +111,11 @@ fn publish(sys: *const r4os.r4sys.Context, staged: [:0]const u8, target: [:0]con
     return expected;
 }
 
-pub fn create(app: *r4os.App, records_path: [:0]const u8, started: r4os.abi.TimeState, finished: r4os.abi.TimeState, custom_reference_key: ?[]const u8) !Result {
+pub fn create(app: *r4os.App2, records_path: [:0]const u8, started: r4os.abi.TimeState, finished: r4os.abi.TimeState, custom_reference_key: ?[]const u8) !Result {
     return createWithPresentation(app, records_path, started, finished, custom_reference_key, .terminal);
 }
 
-pub fn createWithPresentation(app: *r4os.App, records_path: [:0]const u8, started: r4os.abi.TimeState, finished: r4os.abi.TimeState, custom_reference_key: ?[]const u8, presentation: Presentation) !Result {
+pub fn createWithPresentation(app: *r4os.App2, records_path: [:0]const u8, started: r4os.abi.TimeState, finished: r4os.abi.TimeState, custom_reference_key: ?[]const u8, presentation: Presentation) !Result {
     const sys = app.system();
     const dev = app.devicesLowLevel() orelse return error.HardwareApiUnavailable;
     var arena = std.heap.ArenaAllocator.init(sys.allocator());

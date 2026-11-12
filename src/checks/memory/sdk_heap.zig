@@ -2,7 +2,7 @@
 const std = @import("std");
 const r4os = @import("r4os");
 const abi = r4os.abi;
-var explicit_heap: ?r4os.vm_allocator.Heap = null;
+var explicit_heap: ?r4os.vm_allocator.MappedHeap = null;
 
 const Work = struct {
     sys: *const r4os.r4sys.Context,
@@ -88,9 +88,13 @@ fn phase(sys: *const r4os.r4sys.Context, a: std.mem.Allocator) bool {
 }
 
 pub fn run(sys: *const r4os.r4sys.Context) bool {
-    const table = (sys.base.bundle orelse return false).sys orelse return false;
-    if (explicit_heap == null) explicit_heap = .{ .api = table };
-    if (explicit_heap.?.api != table) return false;
+    const context = sys.base.generation2 orelse return false;
+    const table = context.system() orelse return false;
+    if (explicit_heap == null) {
+        explicit_heap = .{ .memory = .{} };
+        explicit_heap.?.init(table);
+    }
+    if (explicit_heap.?.memory.identity != @intFromPtr(table)) return false;
     const before = sys.allocatorStats();
     if (!phase(sys, sys.allocator())) return false;
     sys.allocatorTrim();

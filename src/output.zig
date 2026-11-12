@@ -8,32 +8,107 @@ pub const Output = struct {
     format: cli.Format,
     path: ?[*:0]const u8 = null,
     offset: u64 = 0,
+    stdout: ?r4os.launch_io.Output = null,
+    writer: ?r4os.app_storage.StreamWriter = null,
+    export_path: ?r4os.FilePath = null,
     failed: bool = false,
     detail: ?bool = null,
     sequence: u32 = 0,
     buffer: [4096]u8 = undefined,
     used: usize = 0,
 
-    pub fn init(app: *r4os.App, request: *const cli.Request) Output {
+    pub fn init(app: *r4os.App2, request: *const cli.Request) Output {
         var out = Output{ .sys = app.system(), .format = request.format };
         if (request.export_len != 0) {
             out.path = request.export_path[0..request.export_len :0].ptr;
-            if (out.sys.fileStreamBegin(out.path.?, r4os.abi.file_stream_open_replace) < 0) out.failed = true;
+            out.export_path = r4os.FilePath.parse(request.export_path[0..request.export_len]) catch {
+                out.failed = true;
+                return out;
+            };
+            const files = app.files() orelse { out.failed = true; return out; };
+            out.writer = switch (files.streamWriter(out.export_path.?.asZ(), r4os.abi.file_stream_open_replace)) {
+                .writer => |writer| writer,
+                .failure => { out.failed = true; return out; },
+            };
+        } else {
+            var stdout: r4os.launch_io.Output = undefined;
+            if (r4os.launch_io.Output.init(app, &stdout) != 0) out.failed = true else out.stdout = stdout;
         }
         return out;
     }
 
+    fn sink(raw: ?*anyopaque, chunk: *const r4os.diagnostics.core.Chunk) callconv(.c) r4os.diagnostics.core.Ack {
+        const self: *Output = @ptrCast(@alignCast(raw.?));
+        if (self.writer) |*writer| {
+            // Output is returned by value from init. Rebind its owned path
+            // after every possible move, before any real provider call.
+            writer.state.path = self.export_path.?.asZ().ptr;
+            return switch (writer.write(chunk.data[0..chunk.length])) {
+                .ok => .{ .accepted_bytes = chunk.length },
+                .failure => |code| .{ .kind = @intFromEnum(r4os.diagnostics.core.SinkKind.uncertain), .error_code = code },
+                else => .{ .kind = @intFromEnum(r4os.diagnostics.core.SinkKind.uncertain) },
+            };
+        }
+        if (self.stdout) |*stdout| return consoleSink(stdout, chunk);
+        return .{ .kind = @intFromEnum(r4os.diagnostics.core.SinkKind.failed), .error_code = r4os.abi.err_no_fn };
+    }
+
+    fn consoleWrite(raw: ?*anyopaque, _: u64, bytes: [*]const u8, count: u32, absolute: *const r4os.time_contract.checked.DeadlineBudget) callconv(.c) r4os.stream_transfer.Ack {
+        const stdout: *r4os.launch_io.Output = @ptrCast(@alignCast(raw.?));
+        const a = r4os.abi;
+        const limit: r4os.byte_pipe.Deadline = if (stdout.io.binding(1).?.kind == a.launch_io_pipe)
+            r4os.byte_pipe.deadline(absolute.*) catch return .{ .kind = @intFromEnum(r4os.stream_transfer.IoKind.failed), .error_code = a.byte_pipe_error_clock_changed }
+        else .{};
+        var progress: r4os.byte_pipe.Progress = .{};
+        const rc = stdout.io.writeChecked(1, bytes[0..count], limit, &progress);
+        if (rc != 0) return .{ .kind = @intFromEnum(r4os.stream_transfer.IoKind.uncertain), .error_code = rc };
+        return .{ .bytes = @intCast(progress.bytes), .kind = @intFromEnum(switch (progress.state) {
+            a.byte_pipe_ready => r4os.stream_transfer.IoKind.progress,
+            a.byte_pipe_would_block => .would_block,
+            a.byte_pipe_timed_out => .timed_out,
+            a.byte_pipe_closed, a.byte_pipe_broken_pipe => .closed,
+            else => .failed,
+        }) };
+    }
+
+    fn consoleSink(stdout: *r4os.launch_io.Output, chunk: *const r4os.diagnostics.core.Chunk) r4os.diagnostics.core.Ack {
+        const records = r4os.diagnostics.core;
+        const core = r4os.stream_transfer;
+        if (stdout.failed) return .{ .kind = @intFromEnum(records.SinkKind.failed) };
+        const budget = r4os.rpc_budget.Budget.fromTimeout(stdout.clock.read, .{ .kind = r4os.abi.timeout_kind_finite, .nanoseconds = 2_000_000_000 }) catch return .{ .kind = @intFromEnum(records.SinkKind.failed) };
+        var transfer = core.Transfer.initAbsolute(.write_all, chunk.length, budget.deadline) catch return .{ .kind = @intFromEnum(records.SinkKind.failed) };
+        while (true) {
+            // The producer observes Close and stops its work. Its diagnostic
+            // and completion records still drain under one bounded deadline,
+            // including a cancellation report. Transfer owns every confirmed
+            // prefix; an unknown effect is never replayed.
+            const result = transfer.writeStep(chunk.data[@intCast(transfer.bytes)..chunk.length], r4os.abi.byte_pipe_max_step, false,
+                core.adapters.PlatformClock.sample, &stdout.clock, consoleWrite, stdout) catch return .{ .kind = @intFromEnum(records.SinkKind.uncertain) };
+            if (result.flags & core.core.terminal != 0) {
+                stdout.failed = result.outcome != @intFromEnum(core.Outcome.complete);
+                return .{ .accepted_bytes = @intCast(result.bytes), .error_code = result.error_code,
+                    .kind = @intFromEnum(if (result.flags & core.core.effect_uncertain != 0) records.SinkKind.uncertain else if (stdout.failed) records.SinkKind.failed else records.SinkKind.accepted) };
+            }
+            if (result.outcome == @intFromEnum(core.Outcome.would_block)) stdout.sys.sleepTicks(1);
+        }
+    }
+
     pub fn flush(self: *Output) void {
         if (self.used == 0 or self.failed) return;
-        if (self.path) |path| {
-            const rc = self.sys.fileStreamWrite(path, self.offset, self.buffer[0..self.used], 0);
-            if (rc != @as(i32, @intCast(self.used))) { self.failed = true; return; }
-        } else {
-            self.sys.write(self.buffer[0..self.used]);
-            // The existing console is a retained transcript, not a pipe.
-            // Give terminal/SSH readers time to drain each bounded batch.
-            // This presentation cost is outside every measured workload;
-            // explicit file exports do not incur the pacing delay.
+        // A complete UTF8 transport batch, not a claim that an arbitrarily
+        // large JSON object is atomic. Encoding/framing stays with Spectra.
+        // Queue and storage remain separate through the synchronous callback.
+        var storage: [4104]u8 = undefined;
+        var queue = r4os.diagnostics.core.BoundedDiagnosticBuffer.init(&storage) catch { self.failed = true; return; };
+        const admitted = queue.appendRecord(self.buffer[0..self.used], .info) catch { self.failed = true; return; };
+        if (admitted.kind != @intFromEnum(r4os.diagnostics.core.AppendKind.accepted)) { self.failed = true; return; }
+        const result = queue.flushOnce(@intCast(self.used), sink, self) catch { self.failed = true; return; };
+        if (result.kind != @intFromEnum(r4os.diagnostics.core.FlushKind.progress) or result.accepted_bytes != self.used or result.completed_records != 1) {
+            self.failed = true; // Unknown acceptance is never automatically replayed.
+            return;
+        }
+        if (self.path == null) {
+            // Keep the original retained-console pacing outside measured work.
             self.sys.sleepTicks(@max(self.sys.ticksFromMilliseconds(20), @as(u64, @intCast((self.used + 15) / 16 + 2))));
         }
         self.offset += self.used;
@@ -42,10 +117,19 @@ pub const Output = struct {
 
     pub fn finish(self: *Output) bool {
         self.flush();
-        if (self.path) |path| {
-            if (!self.failed and self.sys.fileStreamFinish(path, self.offset, 0) < 0) self.failed = true;
-            if (self.failed) _ = self.sys.fileStreamAbort(path);
+        if (self.writer) |*writer| {
+            writer.state.path = self.export_path.?.asZ().ptr;
+            if (!self.failed and writer.finish() != .ok) self.failed = true;
+            if (!self.failed) {
+                const info = writer.files.metadata(self.export_path.?.asZ());
+                self.failed = switch (info) {
+                    .found => |value| (r4os.metadata2.fileSize(&value) orelse std.math.maxInt(u64)) != self.offset,
+                    else => true,
+                };
+            }
+            if (self.failed) _ = writer.abort();
         }
+        if (self.stdout) |*stdout| if (stdout.close() != 0) { self.failed = true; };
         return !self.failed;
     }
 
@@ -57,6 +141,13 @@ pub const Output = struct {
             // write. File export byte layout and measured workloads are unchanged.
             if (self.path == null) {
                 if (std.mem.indexOfScalar(u8, bytes[at..][0..count], '\n')) |newline| count = newline + 1;
+            }
+            if (at + count < bytes.len) {
+                while (count != 0 and bytes[at + count] & 0xC0 == 0x80) count -= 1;
+                if (count == 0) {
+                    if (self.used == 0) { self.failed = true; return; }
+                    self.flush(); if (self.failed) return; continue;
+                }
             }
             @memcpy(self.buffer[self.used..][0..count], bytes[at..][0..count]);
             self.used += count; at += count;

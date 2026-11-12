@@ -96,7 +96,7 @@ pub const Job = struct {
     close_started: ?u64 = null,
     kill_sent: bool = false,
 
-    pub fn begin(self: *Job, app: *r4os.App, window: i32, kind: Kind, choice: usize, generation: u64, saved: ?model.SavedRun) !void {
+    pub fn begin(self: *Job, app: *r4os.App2, window: i32, kind: Kind, choice: usize, generation: u64, saved: ?model.SavedRun) !void {
         if (self.active or choice >= model.labels.len or window < 0 or (kind == .upload and (choice != 0 or saved == null))) return error.JobBusy;
         const sys = app.system();
         self.* = .{ .parent = try ownedIdentity(&sys), .generation = generation, .choice = choice, .kind = kind };
@@ -126,7 +126,7 @@ pub const Job = struct {
         self.close_started = sys.monotonicNanoseconds() orelse 0;
         _ = sys.programHandleRequestClose(&self.child);
     }
-    pub fn poll(self: *Job, app: *r4os.App) !?Outcome {
+    pub fn poll(self: *Job, app: *r4os.App2) !?Outcome {
         if (!self.active) return null;
         const sys = app.system();
         if (self.close_started) |started| {
@@ -177,14 +177,14 @@ pub const Job = struct {
     }
 };
 
-pub fn worker(app: *r4os.App, raw: []const u8) i32 {
+pub fn worker(app: *r4os.App2, raw: []const u8) i32 {
     return runWorker(app, raw) catch |err| {
         app.system().write("SPECTRA GUI job: ");
         app.system().println(@errorName(err));
         return 1;
     };
 }
-fn runWorker(app: *r4os.App, raw: []const u8) !i32 {
+fn runWorker(app: *r4os.App2, raw: []const u8) !i32 {
     const sys = app.system();
     const name = raw[prefix.len..];
     if (name.len != directory.len + 32 + 4 or !std.mem.startsWith(u8, name, directory) or !std.mem.endsWith(u8, name, ".CMD")) return error.InvalidPrivateJob;

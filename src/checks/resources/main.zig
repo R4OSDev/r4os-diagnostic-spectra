@@ -36,7 +36,7 @@ const App = struct {
     }
 };
 
-pub fn r4_app_main(r4_app: *r4os.App) i32 {
+pub fn r4_app_main(r4_app: *r4os.App2) i32 {
     var app = App{ .sys = r4_app.system() };
     const sys = &app.sys;
     sys.println("SPECTRA RESOURCES");

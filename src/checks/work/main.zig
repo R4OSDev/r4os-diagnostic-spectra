@@ -1,6 +1,6 @@
 const r4os = @import("r4os");
 
-pub fn r4_app_main(r4_app: *r4os.App) i32 {
+pub fn r4_app_main(r4_app: *r4os.App2) i32 {
     const ctx = r4_app.system();
     const dev = r4_app.devicesLowLevel() orelse return r4os.abi.err_no_group;
     const stress_mode = argsEqual(r4_app.args(), "/STRESS");

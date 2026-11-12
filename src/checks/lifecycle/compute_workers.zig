@@ -59,11 +59,11 @@ pub fn hold(sys: r4os.r4sys.Context) i32 {
     // Stack storage stays alive through every real join, or through terminal
     // process stop. Never return a pointer to a still executing descendant.
     // Bypass only the diagnostic's userland text adapter for this raw console
-    // admission probe. Both actual provider tables and bundle stay resident
+    // admission probe. The actual provider tables and generation2 view stay resident
     // on this retained main frame through join/terminal process stop.
-    const adapted = sys.base.bundle orelse return 39;
-    var original = r4os.program.bundleValueFromR4XStart(adapted.raw) orelse return 39;
-    var work: Work = .{ .sys = r4os.r4sys.Context.init(&original) };
+    const adapted = sys.base.generation2 orelse return 39;
+    var original = r4os.platform2.Context.init(adapted.raw) catch return 39;
+    var work: Work = .{ .sys = r4os.r4sys.Context.fromProgram(.{ .generation2 = &original }) };
     var handle: a.ProgramJoinHandle = .{};
     if (sys.computeWorkerCreate(worker, @intFromPtr(&work), 256 * 1024, &handle) != a.thread_ok) return 40;
     while (!sys.programShouldClose()) sys.sleepTicks(1);

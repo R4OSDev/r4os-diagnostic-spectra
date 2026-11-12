@@ -5,7 +5,7 @@ const client = @import("desktop_snapshot_client.zig");
 const Output = @import("output.zig").Output;
 const abi = r4os.abi;
 
-fn outputs(app: *r4os.App, out: *Output) bool {
+fn outputs(app: *r4os.App2, out: *Output) bool {
     const draw = app.drawing() orelse { out.unavailable("desktop_outputs", "R4DRAW unavailable"); return false; };
     var before: abi.GfxDisplayRevision = .{};
     if (draw.gfxOutputRevision(&before) != abi.gfx_output_ok or before.version != 1 or
@@ -78,7 +78,7 @@ pub const Backend = struct {
     }
 };
 
-fn captureCounters(app: *r4os.App, out: *Output) void {
+fn captureCounters(app: *r4os.App2, out: *Output) void {
     const desk = app.desktop() orelse { out.unavailable("desktop_capture_counters", "R4DESK unavailable"); return; };
     var stats: abi.RemoteFrameCaptureStats = .{};
     if (desk.remoteFrameCaptureStats(&stats) != 0 or stats.version != 1 or stats.size != @sizeOf(abi.RemoteFrameCaptureStats)) {
@@ -89,7 +89,7 @@ fn captureCounters(app: *r4os.App, out: *Output) void {
     });
 }
 
-pub fn collect(app: *r4os.App, dev: *const r4os.r4dev.Context, out: *Output) bool {
+pub fn collect(app: *r4os.App2, dev: *const r4os.r4dev.Context, out: *Output) bool {
     defer captureCounters(app, out);
     const before = dev.displayState();
     var backend: Backend = .{ .sys = app.system() };

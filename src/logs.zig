@@ -6,7 +6,7 @@ const Output = @import("output.zig").Output;
 
 var boot_buffer: [abi.boot_log_buffer_size]u8 = undefined;
 
-fn boot(app: *r4os.App, out: *Output) i32 {
+fn boot(app: *r4os.App2, out: *Output) i32 {
     const sys = app.system();
     for (0..3) |_| {
         const before = sys.bootLogInfo() orelse break;
@@ -28,7 +28,7 @@ fn boot(app: *r4os.App, out: *Output) i32 {
     return 1;
 }
 
-fn service(app: *r4os.App, out: *Output, source: u32, group: []const u8) i32 {
+fn service(app: *r4os.App2, out: *Output, source: u32, group: []const u8) i32 {
     const sys = app.system();
     const allocator = app.lowLevel().allocator();
     for (0..3) |_| {
@@ -66,7 +66,7 @@ fn service(app: *r4os.App, out: *Output, source: u32, group: []const u8) i32 {
     return 1;
 }
 
-pub fn run(app: *r4os.App, group: []const u8, out: *Output) i32 {
+pub fn run(app: *r4os.App2, group: []const u8, out: *Output) i32 {
     if (cli.same(group, "BOOT")) return boot(app, out);
     if (cli.same(group, "SERVICE")) return service(app, out, abi.log_service_source_bootlog, "logsvc_kernel");
     if (cli.same(group, "APPLICATION")) return service(app, out, abi.log_service_source_application, "logsvc_application");

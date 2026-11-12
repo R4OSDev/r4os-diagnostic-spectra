@@ -364,7 +364,7 @@ fn epoch_after(sys: r.r4sys.Context, before: a.ProgramInventoryCursor, changed: 
 // Focused untimed metadata cases. An isolated console guest is required: fake
 // window IDs and the diagnostic's own temporary terminal-host state must not
 // be observed by a concurrently running Desktop. No physical input is used.
-pub fn epoch_owner(app: *r.App) bool {
+pub fn epoch_owner(app: *r.App2) bool {
     const sys = app.system();
     const desk = app.desktop() orelse return false;
     var child: a.ProgramProcessHandle = .{};
@@ -389,7 +389,7 @@ pub fn epoch_owner(app: *r.App) bool {
     sys.println("SPECTRA LIFECYCLE metadata epoch result: OK");
     return true;
 }
-pub fn epochs(app: *r.App) bool {
+pub fn epochs(app: *r.App2) bool {
     const sys = app.system();
     const desk = app.desktop() orelse return false;
     const draw = app.drawing() orelse return false;

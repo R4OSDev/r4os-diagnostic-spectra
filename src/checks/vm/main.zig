@@ -5,7 +5,7 @@ const DiagApi = struct {
     dev: r4os.r4dev.Context,
     resources: r4os.Resources,
 
-    fn init(app: *r4os.App) ?DiagApi {
+    fn init(app: *r4os.App2) ?DiagApi {
         return .{
             .sys = app.system(),
             .dev = app.devicesLowLevel() orelse return null,
@@ -14,7 +14,7 @@ const DiagApi = struct {
     }
 };
 
-pub fn r4_app_main(app: *r4os.App) i32 {
+pub fn r4_app_main(app: *r4os.App2) i32 {
     if (argsEqual(app.args(), "/AP")) return @import("ap.zig").run(app);
     var ctx = DiagApi.init(app) orelse return r4os.abi.err_no_group;
     if (argsEqual(app.args(), "/INVENTORY")) {

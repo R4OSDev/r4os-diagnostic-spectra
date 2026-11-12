@@ -14,7 +14,7 @@ const retire_retry_payload = "async-retire-retry";
 const kill_wait_op: u16 = 0x0597;
 var lifecycle_sys: ?r4os.r4sys.Context = null;
 
-pub fn r4_app_main(app: *r4os.App) i32 {
+pub fn r4_app_main(app: *r4os.App2) i32 {
     var sys = app.system();
     if (hasArg(sys.argsRaw(), "/SERVICE")) return @import("service_flow.zig").run(app);
     if (hasArg(sys.argsRaw(), "/LENGTHS")) return @import("lengths.zig").run(app);

@@ -7,7 +7,7 @@ const DiagApi = struct {
     draw: r4os.r4draw.Context,
     dev: r4os.r4dev.Context,
 
-    fn init(r4_app: *r4os.App) ?DiagApi {
+    fn init(r4_app: *r4os.App2) ?DiagApi {
         return .{
             .sys = r4_app.system(),
             .desk = r4_app.desktop() orelse return null,
@@ -17,7 +17,7 @@ const DiagApi = struct {
     }
 };
 
-pub fn r4_app_main(r4_app: *r4os.App) i32 {
+pub fn r4_app_main(r4_app: *r4os.App2) i32 {
     var ctx = DiagApi.init(r4_app) orelse return r4os.abi.err_no_group;
     var args = std.mem.tokenizeAny(u8, r4_app.args(), " \t");
     var modifiers = false;

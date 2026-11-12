@@ -267,7 +267,7 @@ fn consumers(dev: *const r4os.r4dev.Context, cpu: u32, out: *Output) bool {
     return io_ok and online_rc == a.cpu_lifecycle_ok and online.state == a.cpu_lifecycle_state_online and online.epoch == before.epoch + 1 and
         online.installed_epoch == online.epoch and online.available_cpus == before.available_cpus and online.capacity_generation > before.capacity_generation;
 }
-pub fn run(app: *r4os.App, out: *Output) i32 {
+pub fn run(app: *r4os.App2, out: *Output) i32 {
     system = app.system();
     const dev = app.devicesLowLevel() orelse return 2;
     devices = dev;
@@ -292,7 +292,7 @@ pub fn run(app: *r4os.App, out: *Output) i32 {
 /// A headless shell may launch this audited module as a parallel background
 /// instance. Reuse the existing explicit role0 foreground path, whose main
 /// Task is permanently BSP-only; a transient hard-CPU0 policy is insufficient.
-pub fn launch(app: *r4os.App, out: *Output) i32 {
+pub fn launch(app: *r4os.App2, out: *Output) i32 {
     const sys = app.system();
     var identity: a.ProgramJoinHandle = .{};
     var info: a.ThreadPlacementInfo = .{};
@@ -318,7 +318,7 @@ pub fn launch(app: *r4os.App, out: *Output) i32 {
     out.record("cpu_lifecycle_foreground", "smp", 0, .{ .completed = terminal, .success_acknowledged = ok });
     return if (ok) 0 else 1;
 }
-pub fn foreground(app: *r4os.App, path: []const u8, out: *Output) i32 {
+pub fn foreground(app: *r4os.App2, path: []const u8, out: *Output) i32 {
     if (path.len == 0 or path.len >= 96 or !std.mem.startsWith(u8, path, "C:\\TEMP\\CL")) return 2;
     var name: [96:0]u8 = .{0} ** 96;
     @memcpy(name[0..path.len], path);

@@ -6,7 +6,7 @@ const wire = @import("desktop_check");
 const Check = @import("desktop_check.zig").Check;
 const Status = @import("desktop_image_case").NativeStatus;
 pub const child_argument = Status.child_argument;
-pub fn child(app: *r.App) i32 {
+pub fn child(app: *r.App2) i32 {
     const ticket = Status.parse(app.args()) catch return 2;
     var buffer: [128:0]u8 = undefined;
     const path = Status.path(&buffer, ticket) catch return 2;
@@ -15,7 +15,7 @@ pub fn child(app: *r.App) i32 {
     if (!app.system().exists(path)) return 2;
     return @import("desktop_image_case").nativeProducer(app, path);
 }
-fn nativeReport(app: *r.App, check: *Check, owner: r.abi.ProgramProcessHandle) !bool {
+fn nativeReport(app: *r.App2, check: *Check, owner: r.abi.ProgramProcessHandle) !bool {
     const allocator = app.allocator() orelse return error.AllocatorMissing;
     const bytes = try @import("desktop_bench.zig").readFile(app, &check.native_report);
     defer allocator.free(bytes);
@@ -32,15 +32,15 @@ const Report = owner_report.Report;
 pub const Sample = struct { target: ?Target = null, execution: Execution, capture: Capture };
 pub const Snapshot = [4]?Sample;
 
-pub fn sample(app: *r.App, check: *Check, sequence: usize) !Snapshot {
+pub fn sample(app: *r.App2, check: *Check, sequence: usize) !Snapshot {
     const result = try readOwner(app, check, sequence);
     if (result[0] == null) return error.NativeCaptureUnavailable;
     return result;
 }
-pub fn reportOwner(app: *r.App, check: *Check, sequence: usize) !void {
+pub fn reportOwner(app: *r.App2, check: *Check, sequence: usize) !void {
     _ = try readOwner(app, check, sequence);
 }
-fn readOwner(app: *r.App, check: *Check, sequence: usize) !Snapshot {
+fn readOwner(app: *r.App2, check: *Check, sequence: usize) !Snapshot {
     const observed = try presentationSample(app, check, sequence);
     var result: Snapshot = .{null} ** 4;
     for (observed.owners, 0..) |entry, index| if (entry) |owner| {
@@ -50,7 +50,7 @@ fn readOwner(app: *r.App, check: *Check, sequence: usize) !Snapshot {
 }
 // Same copied report and cleanup ownership as replay, without demanding a CPU
 // capture when only the existing provider presentation receipts are required.
-pub fn presentationSample(app: *r.App, check: *Check, sequence: usize) !owner_report.Observation {
+pub fn presentationSample(app: *r.App2, check: *Check, sequence: usize) !owner_report.Observation {
     if (sequence >= check.replay_reports.len) return error.CaptureSequence;
     var path_buffer: [128:0]u8 = undefined;
     const caller: wire.Identity = .{ .instance = check.caller.instance_id, .generation = check.caller.generation };
@@ -99,7 +99,7 @@ fn find(snapshot: Snapshot, owner: Sample) ?Sample {
     return null;
 }
 
-pub fn run(app: *r.App, check: *Check) !void {
+pub fn run(app: *r.App2, check: *Check) !void {
     // Keep every original APPDEF/CLOCK oracle. Those classic producers do
     // not supply native BOs. Start a new reservation within the SAME overall
     // deadline, after both originals have actually exited and been reaped.

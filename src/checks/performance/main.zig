@@ -509,7 +509,7 @@ const App = struct {
     hardware: ?r4os.abi.HardwareSummary = null,
     stats: RunStats = .{},
 
-    fn init(r4_app: *r4os.App) ?App {
+    fn init(r4_app: *r4os.App2) ?App {
         return .{
             .sys = r4_app.system(),
             .dev = r4_app.devicesLowLevel() orelse return null,
@@ -7550,7 +7550,7 @@ fn avxWorkerMain(arg: u64) callconv(.c) i32 {
     return if (slot == 0) 74 else 75;
 }
 
-pub fn registerProbe(r4_app: *r4os.App) i32 {
+pub fn registerProbe(r4_app: *r4os.App2) i32 {
     var app = App.init(r4_app) orelse return r4os.abi.err_no_group;
     const ok = app.probeAvxRegisterState();
     app.sys.println(if (ok) "SPECTRA SIMD registers result: OK" else "SPECTRA SIMD registers result: FAILED");
@@ -7568,7 +7568,7 @@ fn spinForPreemption(rounds: u32) void {
     }
 }
 
-pub fn r4_app_main(r4_app: *r4os.App) i32 {
+pub fn r4_app_main(r4_app: *r4os.App2) i32 {
     var app = App.init(r4_app) orelse return r4os.abi.err_no_group;
     if (@import("std").ascii.eqlIgnoreCase(@import("std").mem.trim(u8, r4_app.args(), " \t"), "/OBSERVER")) {
         app.monotonic_clock_available = app.queryMonotonicClock(&app.monotonic_clock);

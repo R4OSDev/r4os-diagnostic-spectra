@@ -8,7 +8,7 @@ const phases = std.meta.tags(Phase);
 const Sample = struct { elapsed_ns: u64 = 0, operations: u64 = 0, ok: bool = false };
 var sink: u64 = 0;
 
-pub fn run(app: *r4os.App, work_context: *anyopaque, work: *const fn (*anyopaque) bool) i32 {
+pub fn run(app: *r4os.App2, work_context: *anyopaque, work: *const fn (*anyopaque) bool) i32 {
     const sys = app.system();
     const devices = app.devices() orelse return 1;
     const performance = devices.performance();
@@ -90,7 +90,7 @@ fn number(sys: *const r4os.r4sys.Context, name: []const u8, value: u64) void {
     sys.write("\"");
 }
 
-fn perform(app: *r4os.App, phase: Phase, context: *anyopaque, work: *const fn (*anyopaque) bool) u64 {
+fn perform(app: *r4os.App2, phase: Phase, context: *anyopaque, work: *const fn (*anyopaque) bool) u64 {
     const sys = app.system();
     const resources = app.resources();
     const devices = app.devices() orelse return 0;

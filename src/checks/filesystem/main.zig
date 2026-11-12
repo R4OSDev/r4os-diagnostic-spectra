@@ -46,8 +46,8 @@ const fat32_extent_cache_offset: u32 = 512 * 1024 + 128;
 const fat32_fsinfo_probe_bytes: u64 = 64 * 1024;
 const fat32_fsinfo_probe_chunk: usize = 4 * 1024;
 
-pub fn r4_app_main(app: *r4os.App) i32 {
-    if (!r4std.init(app.startContext())) return r4os.abi.err_no_group;
+pub fn r4_app_main(app: *r4os.App2) i32 {
+    if (!r4std.init2(app.startContext())) return r4os.abi.err_no_group;
     var ctx = app.system();
     var dev = app.devicesLowLevel() orelse return r4os.abi.err_no_group;
     var files = app.files() orelse return r4os.abi.err_no_fn;

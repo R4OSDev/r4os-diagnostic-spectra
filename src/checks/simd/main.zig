@@ -66,12 +66,11 @@ fn chainScalarRounds(seed: u32, round_count: u32) u64 {
     return acc;
 }
 
-var global_raw: ?*const r4os.abi.R4XStartContext = null;
+var global_app: ?*r4os.App2 = null;
 
 fn workerMain(arg: u64) callconv(.c) i32 {
-    const raw = global_raw orelse return 1;
-    const start = r4os.r4xstart.Context.init(raw);
-    var sys = start.r4sys() orelse return 1;
+    const app = global_app orelse return 1;
+    var sys = app.system();
     const idx: usize = @intCast(arg);
     if (idx >= dynamic_worker_count) return 2;
     const seed = seedFor(idx);
@@ -82,24 +81,21 @@ fn workerMain(arg: u64) callconv(.c) i32 {
     return 0;
 }
 
-pub fn r4_app_main(app: *r4os.App) i32 {
+pub fn r4_app_main(app: *r4os.App2) i32 {
     if (argsEqual(app.args(), "/SAVECOST")) return @import("save_cost.zig").run(app);
     if (argsEqual(app.args(), "/REGISTERS")) return @import("../performance/main.zig").registerProbe(app);
     if (argsEqual(app.args(), "/ENVIRONMENT")) return @import("environment.zig").run(app);
-    const raw = app.startContext();
-    const start = r4os.r4xstart.Context.init(raw);
-    if (!start.valid()) return 513;
-    var sys_val = start.r4sys() orelse return 514;
+    var sys_val = app.system();
     const sys = &sys_val;
-    global_raw = raw;
+    global_app = app;
 
     sys.println("SPECTRA SIMD SIMD interleave selftest");
     if (!sys.hasFn("thread_create_handle") or !sys.hasFn("thread_handle_join")) {
         sys.println("SPECTRA SIMD result: SKIP (threads unsupported)");
         return 0;
     }
-    if (argsEqual(start.args(), dynamic_arg)) return dynamicSimdProfile(sys);
-    if (argsEqual(start.args(), irq_stress_arg)) return irqStressProfile(app, sys);
+    if (argsEqual(app.args(), dynamic_arg)) return dynamicSimdProfile(sys);
+    if (argsEqual(app.args(), irq_stress_arg)) return irqStressProfile(app, sys);
 
     var t0: r4os.abi.ProgramJoinHandle = .{};
     if (sys.threadCreateHandle(workerMain, 0, 0, 0, &t0) != r4os.abi.thread_ok) {
@@ -147,7 +143,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     return 0;
 }
 
-fn irqStressProfile(app: *r4os.App, sys: *r4os.r4xstart.R4Sys) i32 {
+fn irqStressProfile(app: *r4os.App2, sys: *r4os.r4sys.Context) i32 {
     sys.write("SPECTRA SIMD irqstress start rounds=");
     sys.printU64(irq_stress_rounds);
     sys.println(" hotloop=yes callsInsideLiveWindow=0");
@@ -180,7 +176,7 @@ fn irqStressProfile(app: *r4os.App, sys: *r4os.r4xstart.R4Sys) i32 {
     return 0;
 }
 
-fn dynamicSimdProfile(sys: *r4os.r4xstart.R4Sys) i32 {
+fn dynamicSimdProfile(sys: *r4os.r4sys.Context) i32 {
     @as(*volatile u32, &dynamic_mxcsr_control).* = readMxcsr() & mxcsr_control_mask;
     var first_wave_results: [dynamic_worker_count]u64 = .{0} ** dynamic_worker_count;
 
@@ -198,7 +194,7 @@ fn dynamicSimdProfile(sys: *r4os.r4xstart.R4Sys) i32 {
     return 0;
 }
 
-fn runDynamicWave(sys: *r4os.r4xstart.R4Sys, wave: usize, previous_results: ?*const [dynamic_worker_count]u64) bool {
+fn runDynamicWave(sys: *r4os.r4sys.Context, wave: usize, previous_results: ?*const [dynamic_worker_count]u64) bool {
     if (wave >= dynamic_wave_count) {
         sys.println("SPECTRA SIMD dynamic result: FAILED invalid wave");
         return false;
@@ -291,9 +287,8 @@ fn validJoinHandle(handle: r4os.abi.ProgramJoinHandle) bool {
 }
 
 fn dynamicWorkerMain(arg: u64) callconv(.c) i32 {
-    const raw = global_raw orelse return 1;
-    const start = r4os.r4xstart.Context.init(raw);
-    var sys = start.r4sys() orelse return 1;
+    const app = global_app orelse return 1;
+    var sys = app.system();
     const wave: usize = @intCast(arg >> 32);
     const index: usize = @intCast(arg & 0xFFFF_FFFF);
     if (wave >= dynamic_wave_count or index >= dynamic_worker_count) return 2;

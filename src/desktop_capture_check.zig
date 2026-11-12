@@ -5,7 +5,7 @@ const r = @import("r4os");
 const a = r.abi;
 const wire = @import("desktop_check");
 
-pub fn run(check: anytype, app: *r.App) !void {
+pub fn run(check: anytype, app: *r.App2) !void {
     const desk = app.desktop() orelse return error.CaptureUnavailable;
     var stats: a.RemoteFrameCaptureStats = .{};
     if (desk.remoteFrameCaptureStats(&stats) != 0 or stats.consumers != 0 or stats.leases != 0 or stats.live_bytes != 0)

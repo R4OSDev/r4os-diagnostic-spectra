@@ -181,7 +181,7 @@ fn worker(raw: u64) callconv(.c) i32 {
     if (gate.load(.acquire) != 1) return 9;
     return cases(@intCast(raw));
 }
-pub fn run(app: *r4os.App, out: *Output) i32 {
+pub fn run(app: *r4os.App2, out: *Output) i32 {
     sys = app.system();
     dev = app.devicesLowLevel() orelse return 2;
     inline for (.{ "cpu_power_info", "cpu_power_capture", "cpu_performance", "cpu_cppc", "cpu_performance_hint", "cpu_capabilities", "cpu_register_read" }) |name| if (!dev.hasFn(name)) return 2;

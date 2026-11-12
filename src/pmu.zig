@@ -226,7 +226,7 @@ fn worker(raw: u64) callconv(.c) i32 {
     }
     return if (gate.load(.acquire) == 1) cases(@intCast(raw)) else 9;
 }
-pub fn run(app: *r4os.App, out: *Output, bench: bool) i32 {
+pub fn run(app: *r4os.App2, out: *Output, bench: bool) i32 {
     sys = app.system();
     dev = app.devicesLowLevel() orelse return 2;
     inline for (.{ "cpu_pmu_info", "cpu_pmu_measure", "cpu_pmu_result" }) |name| if (!dev.hasFn(name)) {

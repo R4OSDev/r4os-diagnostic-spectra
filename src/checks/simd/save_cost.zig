@@ -81,7 +81,7 @@ fn worker(_: u64) callconv(.c) i32 {
     code = 0;
     return 248;
 }
-pub fn run(app: *r4os.App) i32 {
+pub fn run(app: *r4os.App2) i32 {
     sys = app.system();
     dev = app.devicesLowLevel() orelse return 2;
     if (!dev.hasFn("fpu_observation")) return 2;

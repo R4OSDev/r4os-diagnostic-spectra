@@ -157,7 +157,7 @@ fn peer(_: u64) callconv(.c) i32 {
     @atomicStore(u32, &phase, 4, .release);
     return 73;
 }
-fn exercise(app: *r4os.App) !void {
+fn exercise(app: *r4os.App2) !void {
     var sys = app.system();
     system = sys;
     var identity: a.ProgramJoinHandle = .{};
@@ -227,7 +227,7 @@ fn exercise(app: *r4os.App) !void {
     // Return to the BSP before file-system work; AP I/O expansion is separate.
     try checkSelf(&sys, &identity, 0, a.thread_placement_class_interactive);
 }
-pub fn child(app: *r4os.App, args: []const u8) i32 {
+pub fn child(app: *r4os.App2, args: []const u8) i32 {
     var sys = app.system();
     if (!std.mem.startsWith(u8, args, worker_prefix)) return 2;
     const path = args[worker_prefix.len..];
@@ -256,7 +256,7 @@ pub fn child(app: *r4os.App, args: []const u8) i32 {
     }
     return 0;
 }
-pub fn bsp(app: *r4os.App) i32 {
+pub fn bsp(app: *r4os.App2) i32 {
     var sys = app.system();
     var identity: a.ProgramJoinHandle = .{};
     if (sys.threadCurrentHandle(&identity) != a.thread_ok) return failure(&sys, "BSP identity", 1);
@@ -287,7 +287,7 @@ pub fn bsp(app: *r4os.App) i32 {
     return 0;
 }
 
-pub fn parent(app: *r4os.App) i32 {
+pub fn parent(app: *r4os.App2) i32 {
     var sys = app.system();
     var identity: a.ProgramJoinHandle = .{};
     const identity_code = sys.threadCurrentHandle(&identity);

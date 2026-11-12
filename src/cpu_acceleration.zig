@@ -143,7 +143,7 @@ fn worker(raw: u64) callconv(.c) i32 {
     }
     return if (gate.load(.acquire) == 1) cases(@intCast(raw)) else 9;
 }
-pub fn run(app: *r4os.App, out: *Output) i32 {
+pub fn run(app: *r4os.App2, out: *Output) i32 {
     sys = app.system();
     dev = app.devicesLowLevel() orelse return 2;
     execute = dev.cpuAccelerationWorkFunction() orelse return 2;

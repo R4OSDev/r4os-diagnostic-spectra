@@ -8,7 +8,7 @@ const Output = @import("output.zig").Output;
 const Options = @import("desktop_bench_options.zig").Options;
 const snes_path = "C:\\R4OS\\SUBSYSTEMS\\r4os.snes\\R4SNES.R4X";
 
-pub fn readFile(app: *r.App, path: [*:0]const u8) ![]u8 {
+pub fn readFile(app: *r.App2, path: [*:0]const u8) ![]u8 {
     const sys = app.system();
     const info = sys.fileInfo(path) orelse return error.OwnerFileMissing;
     if (info.size == 0 or info.size > 2 * 1024 * 1024) return error.OwnerFileSize;
@@ -28,7 +28,7 @@ fn textField(value: std.json.Value, name: []const u8, expected: []const u8) bool
     const field = value.object.get(name) orelse return false;
     return field == .string and std.mem.eql(u8, field.string, expected);
 }
-fn emit(app: *r.App, out: *Output, path: [*:0]const u8, kind: []const u8, group: []const u8, lines: bool, count: *usize) !void {
+fn emit(app: *r.App2, out: *Output, path: [*:0]const u8, kind: []const u8, group: []const u8, lines: bool, count: *usize) !void {
     const allocator = app.allocator() orelse return error.AllocatorMissing;
     const bytes = try readFile(app, path);
     defer allocator.free(bytes);
@@ -62,7 +62,7 @@ fn emit(app: *r.App, out: *Output, path: [*:0]const u8, kind: []const u8, group:
     }
     if (count.* == 0) return error.OwnerDataMissing;
 }
-fn work(app: *r.App, check: *Check, options: Options, snes: bool, owner_records: *usize) !void {
+fn work(app: *r.App2, check: *Check, options: Options, snes: bool, owner_records: *usize) !void {
     const begin = try check.beginSession(.begin_benchmark);
     check.out.record("benchmark-control", check.resource_group, 0, .{ .owner = check.desktop, .caller = check.caller,
         .snes = snes, .options = options.snes, .output_analysis = options.output_analysis,
@@ -109,7 +109,7 @@ fn work(app: *r.App, check: *Check, options: Options, snes: bool, owner_records:
     if (!check.closeChild(0, false)) return error.SnesReap;
 }
 
-pub fn run(app: *r.App, args: []const u8, out: *Output, snes: bool) i32 {
+pub fn run(app: *r.App2, args: []const u8, out: *Output, snes: bool) i32 {
     const options = @import("desktop_bench_options.zig").parse(args, snes) catch return 2;
     const group: []const u8 = if (snes) "SNES" else "DESKTOP";
     @import("check_context.zig").emit(app, out, group);

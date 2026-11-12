@@ -7,13 +7,13 @@ const benchmark_host_identity = @import("benchmark_host_identity.zig");
 pub const Identity = benchmark_host_identity.Identity;
 pub const method = benchmark_host_identity.method;
 
-pub fn derive(app: *r4os.App) !Identity {
+pub fn derive(app: *r4os.App2) !Identity {
     const dev = app.devicesLowLevel() orelse return error.FirmwareIdentityUnavailable;
     const firmware = dev.firmwareSystemUuid() orelse return error.FirmwareIdentityUnavailable;
     return benchmark_host_identity.deriveBytes(firmware.uuid) catch error.InvalidFirmwareIdentity;
 }
 
-pub fn check(app: *r4os.App, args: []const u8, out: *Output) i32 {
+pub fn check(app: *r4os.App2, args: []const u8, out: *Output) i32 {
     if (args.len != 0) return 2;
     const identity = derive(app) catch |err| {
         out.unavailable("hostid", @errorName(err));

@@ -1,5 +1,52 @@
-﻿Spectra - Diagnosewerkzeug 0.1.113
+﻿Spectra - Diagnosewerkzeug 0.1.114
 =============================
+
+API-Generation2 ab0.1.114
+-------------------------
+Normales App2 und echte Query2-/SYS2-Tabellen ersetzen den alten Appstart.
+R4STD bindet technisch Query2 und init2; seine fachlichen V1-Interfaces
+bleiben erhalten. Die alten Loader-Positivfixtures bleiben nur bis zum
+gemeinsamen Cutover aktiv. Normale bereits migrierte Module werden als
+Start2 erwartet, nicht durch eine alte Kontextinterpretation gestartet.
+
+STDIO und begrenzte UTF8-Ausgabepuffer verwenden bestaetigte Praefixe;
+unbekannte Annahme stoppt ohne Wiederholung. Ein bereits erzeugter letzter
+Diagnosesatz wird auch nach Close noch ausgegeben, nachdem der Produzent
+seine Arbeit beendet hat. Exporte pruefen volle generationstreue Metadaten/
+Dateistrombytes. Upload liest und hasht einen unveraenderlichen Snapshot;
+Quelle, Callbackkontext und Transportpuffer bleiben bis zum echten Socket-
+Close erhalten. Eine ausstehende Freigabe ist keine Uploadbestaetigung.
+
+MEMORY teilt seine logischen Reclaimanforderungen in tatsaechliche maximal
+64Frame-Aufrufe mit echten Quittungen auf. STORAGE trennt generischen
+Reclaimerfolg und wirklichen Dateicache-Reclaim; VM-/Backing-/PageIO- und
+Datenorakel bleiben erhalten. PROGRAMSTORAGE waermt das im Churn genutzte
+CSTARTD/QUIET vor der strikten Messbasis auf. Konsolenpayloads sind von
+Startklassen getrennte Besitzer; GUI/Services koennen je eine anfordern.
+Vorher-/Nachhergleichheiten, Ownerfehler und Freigabezaehler bleiben strikt.
+Der volle GUI-Frame-Zyklus waermt hoechstens4mal seine echte Allocatorform
+auf. Erst aufeinanderfolgende exakte PMM-/VM- und Kernel-Heap-Livewerte
+erlauben die anschliessende separate Messrunde; diese muss weiterhin exakt
+zur Basis zurueckkehren. Der grosse synchrone Ruecklesepuffer ist vorher
+materialisiert und besitzt eine eigene endliche Lebensdauer. Beim warmen
+Konsolenbaum darf ausschliesslich die nachgewiesene Registry-Chunkreserve
+bis zum gemeldeten Warmbestand wachsen; aktive Payloads bleiben gleich.
+Die gemessenen Ring-/Baum-/Reapfaelle erhalten keinerlei Kapazitaetsspielraum.
+
+Vor PROGRAMSTORAGE und PROGRAMLIFECYCLE wird ein installierter net.tcp-
+Anbieter einmal ueber die vorhandene ProviderInfo-Abfrage initialisiert.
+SERVMAN BOOT startet Dienste asynchron; deren spaeter Demand-Load darf
+Modulbild und persistente TCP-Laufzeitbesitzer nicht erst innerhalb einer
+fremden GUI-/Heap-Messung anlegen. Die Abfrage erstellt keine Verbindung
+und sendet keine Pakete. Ein fehlender Katalogeintrag bleibt fehlend.
+Alle gemessenen globalen und eigenen Gleichheiten bleiben strikt.
+
+Der Subsystemcontroller behandelt verweigerte Eingabe waehrend eines
+Input-Resetbarriers als Nullannahme. Er wartet begrenzt beim gleichen
+Prozess/Fenster und innerhalb der bestehenden Controllerfrist; nur ein
+angenommenes Ereignis beendet die Zustellung. Die urspruenglichen Arbeits-,
+PCM-, Eingabe-, Completion-/Reap- und Laufzeitbedingungen bleiben erhalten.
+
 
 Aufrufe
 -------
