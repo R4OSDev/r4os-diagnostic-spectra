@@ -162,5 +162,33 @@ try{
   Assert-True $rejected 'Malformed/old Spectra owner framing was accepted.'
  }
  Assert-True ((Get-SpectraScalar @{value='0';unit='count'}) -ceq '0') 'A quantified zero was lost.'
+ # The immutable original supplies real method/metric shape; all test scores
+ # stay synthetic and in memory. No benchmark or API import is performed.
+ $fixed=Get-Content -Raw (Join-Path $PSScriptRoot '../standard_reference_original.json')|ConvertFrom-Json -AsHashtable
+ $new=Copy-Value $fixed;$new.run_id='83030000-0000-4000-8000-000000000002'
+ $new.comparison_key='345210f5af06c692d5d290d170b10ba48a3bfba12b2369491ae3d13d02d0b907'
+ $new.environment.workloads.lifecycle_fixture_sha256='e91432c45d49c6684ee10861df0c19daa1a696cf97e095dc63be99d6f8124e0d'
+ @($new.artifacts|Where-Object {$_.component -ceq 'lifecycle-fixture'})[0].sha256=$new.environment.workloads.lifecycle_fixture_sha256
+ Set-SpectraScores $new $fixed
+ Assert-True (@($new.scores|Where-Object {$_.score -cne '100.000000'}).Count -eq 0) 'Exact complete method transition was not scored.'
+ foreach($case in @('payload','old-key-substitution','extra-work','changed-work','measurement','cpu-policy','settle','repetitions','reference-metric','artifact-hash','duplicate-artifact')){
+  $probe=Copy-Value $new;$baseline=Copy-Value $fixed
+  switch($case){
+   'payload' {$probe.environment.workloads.lifecycle_fixture_sha256='a'*64}
+   'old-key-substitution' {$probe.comparison_key=$baseline.comparison_key}
+   'extra-work' {$probe.environment.workloads.additional='1'}
+   'changed-work' {$probe.environment.workloads.lifecycle='additional-work'}
+   'measurement' {$probe.environment.measurement='another-method'}
+   'cpu-policy' {$probe.environment.cpu_policy='one-cpu'}
+   'settle' {$probe.environment.settle_ms='0'}
+   'repetitions' {$probe.environment.repetitions='4'}
+   'reference-metric' {$baseline.metrics[0].metric_version='1'}
+   'artifact-hash' {@($probe.artifacts|Where-Object {$_.component -ceq 'lifecycle-fixture'})[0].sha256='a'*64}
+   'duplicate-artifact' {$probe.artifacts+=,@($probe.artifacts|Where-Object {$_.component -ceq 'lifecycle-fixture'})[0]}
+  }
+  Set-SpectraScores $probe $baseline
+  Assert-True (@($probe.scores|Where-Object {$null -ne $_.score}).Count -eq 0) ('Incompatible transition scored: '+$case)
+ }
+ Assert-True ($fixed.comparison_key -ceq '962ef07e9b752294bf76297993199651e0dd3acbe61311505fc60497e855520b') 'Original reference key was changed.'
  Write-Host 'Spectra standard/structured contracts: original scoring/reference and lossless owner framing checks passed.'
 }finally{Remove-Item -LiteralPath $scratch -Recurse -Force}

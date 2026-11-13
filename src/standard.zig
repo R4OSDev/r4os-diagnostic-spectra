@@ -95,13 +95,20 @@ fn activeWarmup(index: usize, deadline: u64) model.Sample {
     return total;
 }
 pub fn run(app: *r4os.App2, request: *const cli.Request, out: *Output) i32 {
-    const config = @import("standard_reference.zig").parseOptions(request.args()) catch {
+    const requested = @import("standard_reference.zig").parseOptions(request.args()) catch {
         out.unavailable("standard", "use /AREA:id, /BASELINE or /REFERENCE:path /COMPAREKEY:key, and /SETTLE:0..5000");
         return 2;
     };
     sys = app.system();
     net = app.networkLowLevel();
     dev = app.devicesLowLevel();
+    // Hash/admit the actual whole fixture before any measured worker starts.
+    // A requested reference key never replaces this work identity.
+    const work = @import("standard_export.zig").currentWork(app) catch {
+        out.unavailable("standard", "unqualified-lifecycle-fixture");
+        return 1;
+    };
+    const config = @import("standard_reference.zig").bindCurrent(requested, work);
     cleanup_failed = false;
     if (out.detail == null) {
         out.unavailable("standard", "instrumentation-mode-unavailable");

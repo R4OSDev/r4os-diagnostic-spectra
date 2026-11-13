@@ -4,6 +4,7 @@ const std = @import("std");
 const r4os = @import("r4os");
 const identity_api = @import("standard_identity.zig");
 const run_json = @import("standard_run_json.zig");
+const work_api = @import("standard_work_identity.zig");
 const child_path = @import("standard_workloads.zig").child_path;
 const root_dir = "C:\\R4OS\\DATA\\BENCHMARKS";
 
@@ -33,6 +34,14 @@ fn hashFile(sys: *const r4os.r4sys.Context, path: [:0]const u8) !Hash {
     var digest: [32]u8 = undefined;
     sha.final(&digest);
     return .{ .sha256 = std.fmt.bytesToHex(digest, .lower), .bytes = info.size };
+}
+
+/// Bind exactly the actual admitted file before sampling; export checks it
+/// again after all measured workers have exited and compares raw context.
+pub fn currentWork(app: *r4os.App2) !work_api.Identity {
+    const sys = app.system();
+    const actual = try hashFile(&sys, child_path);
+    return work_api.verifyCurrent(actual.bytes, &actual.sha256);
 }
 
 fn utc(value: r4os.abi.TimeState) ![20]u8 {
@@ -111,11 +120,11 @@ fn publish(sys: *const r4os.r4sys.Context, staged: [:0]const u8, target: [:0]con
     return expected;
 }
 
-pub fn create(app: *r4os.App2, records_path: [:0]const u8, started: r4os.abi.TimeState, finished: r4os.abi.TimeState, custom_reference_key: ?[]const u8) !Result {
-    return createWithPresentation(app, records_path, started, finished, custom_reference_key, .terminal);
+pub fn create(app: *r4os.App2, records_path: [:0]const u8, started: r4os.abi.TimeState, finished: r4os.abi.TimeState) !Result {
+    return createWithPresentation(app, records_path, started, finished, .terminal);
 }
 
-pub fn createWithPresentation(app: *r4os.App2, records_path: [:0]const u8, started: r4os.abi.TimeState, finished: r4os.abi.TimeState, custom_reference_key: ?[]const u8, presentation: Presentation) !Result {
+pub fn createWithPresentation(app: *r4os.App2, records_path: [:0]const u8, started: r4os.abi.TimeState, finished: r4os.abi.TimeState, presentation: Presentation) !Result {
     const sys = app.system();
     const dev = app.devicesLowLevel() orelse return error.HardwareApiUnavailable;
     var arena = std.heap.ArenaAllocator.init(sys.allocator());
@@ -139,6 +148,7 @@ pub fn createWithPresentation(app: *r4os.App2, records_path: [:0]const u8, start
     module_buffer[@intCast(module_len)] = 0;
     const spectra_hash = try hashFile(&sys, module_buffer[0..@intCast(module_len) :0]);
     const fixture_hash = try hashFile(&sys, child_path);
+    _ = try work_api.verifyCurrent(fixture_hash.bytes, &fixture_hash.sha256);
     var release_buffer: [128]u8 = undefined;
     const release_info = sys.fileInfo("C:\\R4OS\\CONFIG\\VERSION.R4S") orelse return error.ReleaseVersionUnavailable;
     if (release_info.size == 0 or release_info.size > release_buffer.len) return error.ReleaseVersionUnavailable;
@@ -161,7 +171,6 @@ pub fn createWithPresentation(app: *r4os.App2, records_path: [:0]const u8, start
     const cpu_brand = std.mem.trim(u8, std.mem.sliceTo(&cpu.brand_name, 0), " ");
     const ram_text = try std.fmt.allocPrint(a, "{d}", .{memory.total_physical_bytes});
     const comparison = try run_json.comparisonKey(a, &fixture_hash.sha256);
-    const chosen_comparison = custom_reference_key orelse comparison[0..];
     const environment_bytes = try std.json.Stringify.valueAlloc(a, .{
         .execution = if (backend == null) "native" else "qemu",
         .vcpus = vcpus,
@@ -214,7 +223,7 @@ pub fn createWithPresentation(app: *r4os.App2, records_path: [:0]const u8, start
             (if (backend == null) "r4os-native-gui-standard3-v1" else "r4os-qemu-gui-standard3-v1")
         else
             (if (backend == null) "r4os-native-standard3-v1" else "r4os-qemu-standard3-v1"),
-        .comparison_key = chosen_comparison,
+        .comparison_key = comparison[0..],
         .environment = environment.value,
         .artifacts = artifacts.value,
     });

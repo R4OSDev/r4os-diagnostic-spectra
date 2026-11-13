@@ -1,6 +1,7 @@
 const std = @import("std");
 const cli = @import("cli.zig");
 const model = @import("standard_model.zig");
+const work_api = @import("standard_work_identity.zig");
 const default_key = "962ef07e9b752294bf76297993199651e0dd3acbe61311505fc60497e855520b";
 const frozen_reference = @embedFile("standard_reference_original.json");
 const frozen_reference_sha256 = "dbc69c15f01c54f3abca36f0b11db2070a4a26fd0b0bfca5490716137a744d2d";
@@ -11,11 +12,15 @@ pub const Config = struct {
     path: [260:0]u8 = .{0} ** 260,
     key: [128]u8 = .{0} ** 128,
     key_len: usize = 0,
+    work: ?work_api.Identity = null,
+    reference_key: [128]u8 = .{0} ** 128,
+    reference_key_len: usize = 0,
 };
 pub const Reference = struct {
     values: [5]?f64 = .{null} ** 5,
     run_id: [36]u8 = .{0} ** 36,
     reason: ?[]const u8 = "reference-not-supplied",
+    compatibility: ?work_api.Compatibility = null,
 };
 fn value(token: []const u8, prefix: []const u8) ?[]const u8 {
     if (token.len < prefix.len or !cli.same(token[0..prefix.len], prefix)) return null;
@@ -58,6 +63,19 @@ pub fn parseOptions(args: []const u8) !Config {
     }
     return config;
 }
+/// The measured key always describes the actual verified current work. A
+/// custom reference key selects a reference; it cannot replace that identity.
+pub fn bindCurrent(config: Config, identity: work_api.Identity) Config {
+    var result = config;
+    if (config.path[0] != 0) {
+        result.reference_key = config.key;
+        result.reference_key_len = config.key_len;
+    }
+    @memcpy(result.key[0..64], &identity.comparison_key);
+    result.key_len = 64;
+    result.work = identity;
+    return result;
+}
 const Value = std.json.Value;
 fn field(object: Value, key: []const u8) ?Value {
     return if (object == .object) object.object.get(key) else null;
@@ -83,8 +101,11 @@ pub fn readReference(root: Value, config: Config, detail: bool) Reference {
     const schema = decimal(field(root, "schema_version") orelse return result) orelse return result;
     if (schema != 1 or !isText(root, "status", "completed") or
         !isText(root, "suite_version", model.suite_version) or !isText(root, "scoring_version", model.scoring_version) or
-        !isText(root, "instrumentation_mode", if (detail) "detail" else "base") or
-        !isText(root, "comparison_key", config.key[0..config.key_len])) return result;
+        !isText(root, "instrumentation_mode", if (detail) "detail" else "base")) return result;
+    if (config.work) |identity| {
+        if (config.reference_key_len != 0 and !isText(root, "comparison_key", config.reference_key[0..config.reference_key_len])) return result;
+        result.compatibility = work_api.referenceCompatibility(identity, root) orelse return result;
+    } else if (!isText(root, "comparison_key", config.key[0..config.key_len])) return result;
     const id = text(root, "run_id") orelse return result;
     if (id.len != 36) return result;
     for (id, 0..) |ch, i| {
@@ -132,6 +153,7 @@ pub fn readReference(root: Value, config: Config, detail: bool) Reference {
 }
 var file_bytes: [256 * 1024]u8 = undefined;
 pub fn load(app: anytype, config: Config, detail: ?bool) Reference {
+    if (config.work == null) return .{ .reason = "actual-work-identity-unavailable" };
     if (config.path[0] == 0) {
         if (config.self_reference) return .{};
         var digest: [32]u8 = undefined;
@@ -181,4 +203,21 @@ test "frozen Suite 3 reference matches the default guest comparison key" {
     const reference = readReference(parsed.value, config, false);
     try std.testing.expect(reference.reason == null);
     try std.testing.expectEqualStrings("28b326e2-4323-4a4c-a0d2-4c1bab4958c0", &reference.run_id);
+}
+
+test "actual current work and selected original reference keep their different raw keys" {
+    const actual = try work_api.verifyCurrent(work_api.current_bytes, work_api.current_hash);
+    const config = bindCurrent(try parseOptions(""), actual);
+    try std.testing.expectEqualStrings(work_api.current_key, config.key[0..config.key_len]);
+    const parsed = try std.json.parseFromSlice(Value, std.testing.allocator, frozen_reference, .{});
+    defer parsed.deinit();
+    const reference = readReference(parsed.value, config, false);
+    try std.testing.expect(reference.reason == null);
+    try std.testing.expectEqual(work_api.Compatibility.exact_fixture_transition, reference.compatibility.?);
+    try std.testing.expectEqualStrings(work_api.original_key, text(parsed.value, "comparison_key").?);
+    const custom = bindCurrent(try parseOptions("/REFERENCE:C:\\REF.JSON /COMPAREKEY:" ++ work_api.original_key), actual);
+    try std.testing.expectEqualStrings(work_api.current_key, custom.key[0..custom.key_len]);
+    try std.testing.expect(readReference(parsed.value, custom, false).reason == null);
+    const wrong = bindCurrent(try parseOptions("/REFERENCE:C:\\REF.JSON /COMPAREKEY:wrong"), actual);
+    try std.testing.expect(readReference(parsed.value, wrong, false).reason != null);
 }

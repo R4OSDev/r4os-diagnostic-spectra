@@ -85,14 +85,41 @@ function Get-SpectraMethod($Environment) {
  if($method.cpu_policy -cne 'all-available-v1' -or $method.measurement -cne 'parallel-wall-ns-per-operation-v3' -or $method.filesystem -cne 'ntfs'){throw 'Unexpected Suite-3 CPU/measurement/filesystem policy.'}
  return $method
 }
+# Exact independently proven complete STDCHILD container transition. Actual
+# raw method keys/fixture hashes remain distinct; the reference stays frozen.
+function Get-SpectraMethodFingerprint($Method) {
+ $bytes=[Text.Encoding]::UTF8.GetBytes((Get-SpectraCanonical $Method))
+ return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+}
+function Get-SpectraFixtureTransition($Run,$Reference,$CurrentMethod,$ReferenceMethod) {
+ $oldHash='75122e4a5a360dd0db05a81e42ca1d88b95f877dca46a09dc02b329f523e8037'
+ $newHash='e91432c45d49c6684ee10861df0c19daa1a696cf97e095dc63be99d6f8124e0d'
+ $oldKey='962ef07e9b752294bf76297993199651e0dd3acbe61311505fc60497e855520b'
+ $newKey='345210f5af06c692d5d290d170b10ba48a3bfba12b2369491ae3d13d02d0b907'
+ $hashes=@{};$hashes[$oldKey]=$oldHash;$hashes[$newKey]=$newHash
+ if($Run.comparison_key -ceq $Reference.comparison_key -or !$hashes.ContainsKey($Run.comparison_key) -or !$hashes.ContainsKey($Reference.comparison_key)){return $false}
+ foreach($pair in @(@($Run,$CurrentMethod),@($Reference,$ReferenceMethod))){
+  $item=$pair[0];$method=$pair[1];$hash=$hashes[$item.comparison_key]
+  if($method.workloads.lifecycle_fixture_sha256 -cne $hash -or (Get-SpectraMethodFingerprint $method) -cne $item.comparison_key){return $false}
+  $artifact=@($item.artifacts|Where-Object {$_.component -ceq 'lifecycle-fixture'})
+  if($artifact.Count -ne 1 -or $artifact[0].sha256 -cne $hash){return $false}
+ }
+ return $true
+}
 function Get-SpectraComparisonReason($Run,$Reference) {
  try {
  $null=[guid]::Parse($Reference.run_id)
  if($Reference.schema_version -ne 1 -or $Reference.status -cne 'completed' -or [string]$Reference.run_id -notmatch '^[0-9a-fA-F-]{36}$'){return 'reference-incomplete-or-invalid'}
- foreach($key in @('suite_version','scoring_version','comparison_key','instrumentation_mode')){
+ foreach($key in @('suite_version','scoring_version','instrumentation_mode')){
   if(!$Run[$key] -or $Run[$key] -cne $Reference[$key]){return 'incompatible-'+$key}
  }
- if((Get-SpectraCanonical (Get-SpectraMethod $Run.environment)) -cne (Get-SpectraCanonical (Get-SpectraMethod $Reference.environment))){return 'incompatible-workload-method'}
+ $currentMethod=Get-SpectraMethod $Run.environment;$referenceMethod=Get-SpectraMethod $Reference.environment
+ foreach($pair in @(@($Run,$currentMethod),@($Reference,$referenceMethod))){
+  if($pair[1].workloads.Contains('lifecycle_fixture_sha256') -and (Get-SpectraMethodFingerprint $pair[1]) -cne $pair[0].comparison_key){return 'incompatible-method-identity'}
+ }
+ if($Run.comparison_key -ceq $Reference.comparison_key){
+  if((Get-SpectraCanonical $currentMethod) -cne (Get-SpectraCanonical $referenceMethod)){return 'incompatible-workload-method'}
+ }elseif(!(Get-SpectraFixtureTransition $Run $Reference $currentMethod $referenceMethod)){return 'incompatible-comparison_key'}
  if(@($Reference.metrics).Count -ne 5){return 'reference-metrics-incomplete'}
  foreach($area in $script:SpectraAreas){
   $found=@($Reference.metrics|Where-Object {$_.area_id -ceq $area -and $_.metric_id -ceq 'elapsed_ns_per_operation'})

@@ -124,7 +124,7 @@ fn run(app: *r4os.App2, request: *const cli.Request, report: *Report, emit: bool
     }
     const machine_path = if (request.format == .json) result_name else raw_name;
     report.phase = "save";
-    const saved = export_api.createWithPresentation(app, machine_path, started_utc, finished_utc, if (config.path[0] != 0) config.key[0..config.key_len] else null, presentation) catch |err| {
+    const saved = export_api.createWithPresentation(app, machine_path, started_utc, finished_utc, presentation) catch |err| {
         report.error_name = @errorName(err);
         if (emit) {
             sys.write("SPECTRA STANDARD export: ");
