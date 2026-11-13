@@ -152,10 +152,10 @@ fn checkInvalidStartRejected(ctx: *const r4os.r4sys.Context, path: [*:0]const u8
     const feature_ok = hasMeta(data, "feature=invalid-start-contract-negative");
     const start_ok = hasMeta(data, "r4x.start=invalid");
     const entry_meta_ok = hasMeta(data, "r4x.entry=MissingStart");
-    const context_ok = hasMeta(data, "r4x.context=R4XStartContext");
+    const context_ok = hasMeta(data, "r4x.context=R4XStartContext2");
     const no_exports = readLe32(data[36..40]) == 0;
-    const r4xstart_absent = !hasExport(data, "R4XStart", 1);
-    const r4sys_ok = hasImport(data, "R4SYS", "Query", 1);
+    const r4xstart_absent = !hasExport(data, "R4XStart2", 2);
+    const r4sys_ok = hasImport(data, "R4SYS", "Query2", 2);
     const class_rc = ctx.programClass(path, .auto);
     const rejected_ok = class_rc == -2;
     printCheck(ctx, "Invalid start feature", feature_ok);
@@ -163,7 +163,7 @@ fn checkInvalidStartRejected(ctx: *const r4os.r4sys.Context, path: [*:0]const u8
     printCheck(ctx, "Invalid start entry meta", entry_meta_ok);
     printCheck(ctx, "Invalid start context meta", context_ok);
     printCheck(ctx, "Invalid start no exports", no_exports);
-    printCheck(ctx, "Invalid start no R4XStart export", r4xstart_absent);
+    printCheck(ctx, "Invalid start no R4XStart2 export", r4xstart_absent);
     printCheck(ctx, "Invalid start R4SYS import", r4sys_ok);
     ctx.write("  Invalid start loader rejection: ");
     ctx.write(if (rejected_ok) "OK" else "FAILED");
@@ -418,13 +418,16 @@ fn checkLoaderStress(ctx: *const r4os.r4sys.Context, dev: *const r4os.r4dev.Cont
 
     ok = checkLargeR4M(ctx, "Loader stress R4X", r4x_path, 1, 2, 1) and ok;
     ok = checkLargeImport(ctx, r4x_path, "EXTMATH", "API_V1", 1) and ok;
-    ok = checkLargeExport(ctx, r4x_path, "R4XStart", 1) and ok;
+    ok = checkLargeExport(ctx, r4x_path, "R4XStart2", 2) and ok;
     ok = checkLargeR4M(ctx, "Loader stress R4L", r4l_path, 2, 0, 1) and ok;
     ok = checkLargeExport(ctx, r4l_path, "LoadStressValue", 1) and ok;
-    ok = checkLargeR4M(ctx, "Loader stress R4D", r4d_path, 3, 0, 2) and ok;
-    ok = checkLargeExport(ctx, r4d_path, "DriverInit", 1) and ok;
+    ok = checkLargeR4M(ctx, "Loader stress R4D", r4d_path, 3, 1, 2) and ok;
+    ok = checkLargeImport(ctx, r4d_path, "R4DEV", "Query2", 2) and ok;
+    ok = checkLargeExport(ctx, r4d_path, "DriverInit2", 2) and ok;
     ok = checkLargeExport(ctx, r4d_path, "DriverShutdown", 1) and ok;
     ok = checkLargeR4M(ctx, "Loader stress R4P", r4p_path, 4, 1, 5) and ok;
+    ok = checkLargeImport(ctx, r4p_path, "R4DEV", "Query2", 2) and ok;
+    ok = checkLargeExport(ctx, r4p_path, "ProtocolInit2", 2) and ok;
     ok = checkProtocolState(ctx, dev, "misc.loaderstress", .loaded) and ok;
     ok = checkLoaderStressDispatch(ctx, dev) and ok;
     ok = checkProtocolState(ctx, dev, "misc.loaderstress", .active) and ok;
