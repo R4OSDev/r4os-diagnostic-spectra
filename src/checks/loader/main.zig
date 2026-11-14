@@ -256,12 +256,11 @@ fn checkPlatformApiFilesAbsent(ctx: *const r4os.r4sys.Context) bool {
 }
 
 fn checkR4LQueryNegativeValidation(ctx: *const r4os.r4sys.Context) bool {
-    const base = r4os.abi.R4LQuery{
-        .magic = r4os.abi.r4l_abi_magic,
-        .abi_version = r4os.abi.r4l_abi_version,
-        .size = r4os.abi.r4l_query_struct_size,
+    const base = r4os.platform2.abi.R4LQuery2{
+        .magic = 0x324c3452,
+        .abi_version = 2,
+        .size = 24,
         .group = @intFromEnum(r4os.abi.R4LGroup.r4dev),
-        .kernel_bridge = 0,
         .reserved = 0,
     };
     var wrong_version = base;
@@ -269,14 +268,17 @@ fn checkR4LQueryNegativeValidation(ctx: *const r4os.r4sys.Context) bool {
     var wrong_group = base;
     wrong_group.group = 7;
     var incompatible_table = base;
-    incompatible_table.size = r4os.abi.r4l_query_struct_size - 8;
+    incompatible_table.size = 16;
+    var retired_size = base;
+    retired_size.size = 32;
 
     const version_ok = !validateR4LQuery(wrong_version, .r4dev);
     const group_ok = !validateR4LQuery(wrong_group, .r4dev);
-    const table_ok = !validateR4LQuery(incompatible_table, .r4dev);
-    printCheck(ctx, "Platform Query rejects wrong version", version_ok);
-    printCheck(ctx, "Platform Query rejects wrong group", group_ok);
-    printCheck(ctx, "Platform Query rejects incompatible table", table_ok);
+    const table_ok = !validateR4LQuery(incompatible_table, .r4dev) and
+        !validateR4LQuery(retired_size, .r4dev) and validateR4LQuery(base, .r4dev);
+    printCheck(ctx, "Platform Query2 rejects wrong version", version_ok);
+    printCheck(ctx, "Platform Query2 rejects wrong group", group_ok);
+    printCheck(ctx, "Platform Query2 rejects incompatible table", table_ok);
     return version_ok and group_ok and table_ok;
 }
 
@@ -337,12 +339,11 @@ fn checkR4LResolverNegativeBootLog(ctx: *const r4os.r4sys.Context) bool {
         duplicate_export_ok and duplicate_provider_ok and malformed_table_ok and named_diagnostic_ok;
 }
 
-fn validateR4LQuery(query: r4os.abi.R4LQuery, expected_group: r4os.abi.R4LGroup) bool {
-    return query.magic == r4os.abi.r4l_abi_magic and
-        query.abi_version == r4os.abi.r4l_abi_version and
-        query.size >= r4os.abi.r4l_query_struct_size and
+fn validateR4LQuery(query: r4os.platform2.abi.R4LQuery2, expected_group: r4os.abi.R4LGroup) bool {
+    return query.magic == 0x324c3452 and
+        query.abi_version == 2 and
+        query.size == 24 and
         query.group == @intFromEnum(expected_group) and
-        query.kernel_bridge == 0 and
         query.reserved == 0;
 }
 
