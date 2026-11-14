@@ -42,8 +42,8 @@ pub fn r4_app_main(app: *r4os.App2) i32 {
     ok = checkR4XStartImports(&ctx, start) and ok;
     ok = checkNamedRuntimeR4L(&ctx, start) and ok;
     ok = checkR4X(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\BEEP.R4X") and ok;
-    ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\BEEP.R4X", true) and ok;
-    ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\R4XSTARTD.R4X", true) and ok;
+    ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\BEEP.R4X") and ok;
+    ok = checkCurrentStartContract(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\R4XSTARTD.R4X") and ok;
     ok = checkInvalidStartRejected(&ctx, "C:\\R4OS\\SOFTWARE\\TERMINAL\\DIAG\\BADSTART.R4X") and ok;
     ok = checkPlatformApiFilesAbsent(&ctx) and ok;
     ok = checkR4LQueryNegativeValidation(&ctx) and ok;
@@ -111,7 +111,7 @@ fn checkR4X(ctx: *const r4os.r4sys.Context, path: [*:0]const u8) bool {
     return magic_ok and version_ok and arch_ok and header_ok and offset_ok and code_ok and entry_ok and flags_ok and reserved_ok;
 }
 
-fn checkCurrentStartContract(ctx: *const r4os.r4sys.Context, path: [*:0]const u8, generation2: bool) bool {
+fn checkCurrentStartContract(ctx: *const r4os.r4sys.Context, path: [*:0]const u8) bool {
     var head: [8192]u8 = undefined;
     const data = readHeaderPrefix(ctx, path, head[0..]) orelse return false;
     ctx.print("read ");
@@ -122,14 +122,14 @@ fn checkCurrentStartContract(ctx: *const r4os.r4sys.Context, path: [*:0]const u8
     var strings_buf: [4096]u8 = undefined;
     const strings = readStringBlock(ctx, path, data, strings_buf[0..]) orelse return false;
     const r4m_ok = checkR4M(ctx, "R4XStart R4M", data, 1, 1, 1);
-    const revision: u32 = if (generation2) 2 else 1;
-    const start_ok = stringBlockHas(strings, if (generation2) "r4x.start=r4xstart2" else "r4x.start=r4xstart");
-    const entry_meta_ok = stringBlockHas(strings, if (generation2) "r4x.entry=R4XStart2" else "r4x.entry=R4XStart");
-    const context_ok = stringBlockHas(strings, if (generation2) "r4x.context=R4XStartContext2" else "r4x.context=R4XStartContext");
-    const export_ok = hasExportInStringBlock(data, strings, if (generation2) "R4XStart2" else "R4XStart", revision) and
-        !hasExportInStringBlock(data, strings, if (generation2) "R4XStart" else "R4XStart2", if (generation2) 1 else 2);
-    const r4sys_ok = hasImportInStringBlock(data, strings, "R4SYS", if (generation2) "Query2" else "Query", revision) and
-        !hasImportInStringBlock(data, strings, "R4SYS", if (generation2) "Query" else "Query2", if (generation2) 1 else 2);
+    const revision: u32 = 2;
+    const start_ok = stringBlockHas(strings, "r4x.start=r4xstart2");
+    const entry_meta_ok = stringBlockHas(strings, "r4x.entry=R4XStart2");
+    const context_ok = stringBlockHas(strings, "r4x.context=R4XStartContext2");
+    const export_ok = hasExportInStringBlock(data, strings, "R4XStart2", revision) and
+        !hasExportInStringBlock(data, strings, "R4XStart", 1);
+    const r4sys_ok = hasImportInStringBlock(data, strings, "R4SYS", "Query2", revision) and
+        !hasImportInStringBlock(data, strings, "R4SYS", "Query", 1);
     printCheck(ctx, "R4XStart start contract", start_ok);
     printCheck(ctx, "R4XStart entry meta", entry_meta_ok);
     printCheck(ctx, "R4XStart context meta", context_ok);
