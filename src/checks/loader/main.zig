@@ -175,21 +175,19 @@ fn checkInvalidStartRejected(ctx: *const r4os.r4sys.Context, path: [*:0]const u8
 
 // Actual Query2 import admission, exact generated header and reserved slots.
 // Independent functional V1 interfaces below remain separate from this ABI.
-fn checkGroupTable(ctx: *const r4os.r4sys.Context, start: r4os.platform2.Context,
-    comptime group: r4os.abi.R4LGroup, comptime module: []const u8,
-    comptime Table: type) bool {
+fn checkGroupTable(ctx: *const r4os.r4sys.Context, start: r4os.platform2.Context, comptime group: r4os.abi.R4LGroup, comptime module: []const u8, comptime Table: type) bool {
     const item = start.findImportNamed(module, "Query2") orelse return failCheck(ctx, module);
     const expected: Table = .{};
     const ok = item.group_id == @intFromEnum(group) and item.min_version == 2 and item.resolved_version == 2 and
         item.flags & r4os.abi.r4xstart_import_flag_group_interface != 0 and item.table != 0 and
         item.table % @alignOf(Table) == 0 and blk: {
-            const table: *const Table = @ptrFromInt(item.table);
-            var valid = table.magic == expected.magic and table.abi_version >= expected.abi_version and table.size >= @sizeOf(Table);
-            inline for (@import("std").meta.fields(Table)) |field| {
-                if (comptime @import("std").mem.startsWith(u8, field.name, "reserved")) valid = valid and @field(table.*, field.name) == 0;
-            }
-            break :blk valid;
-        };
+        const table: *const Table = @ptrFromInt(item.table);
+        var valid = table.magic == expected.magic and table.abi_version >= expected.abi_version and table.size >= @sizeOf(Table);
+        inline for (@import("std").meta.fields(Table)) |field| {
+            if (comptime @import("std").mem.startsWith(u8, field.name, "reserved")) valid = valid and @field(table.*, field.name) == 0;
+        }
+        break :blk valid;
+    };
     printCheck(ctx, module ++ " Query2 group table", ok);
     return ok;
 }
