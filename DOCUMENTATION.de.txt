@@ -453,3 +453,19 @@ Desktop-Abnahme0.90.65 / Spectra0.1.111
 --------------------------------------
 Der Replay-Uebergang verwendet denselben begrenzten Sessionabschluss wie die regulaere Bereinigung. Weitere Arbeit beginnt nach der echten Quittung und erneuter Pruefung der unveraenderten Gesamtfrist. Der asynchrone Launchtest prueft vor Aufnahme seiner festen SVCSTALL-Fixture auf eine bereits bestehende Definition. Start-, Stop- und Removeergebnisse stehen im Originalexport. Fehlende Cleanupquittungen verhindern den erfolgreichen Abschluss. Der feste Endpunktname des ServiceClassDiag-Verbrauchers bleibt dessen Vertrag.
 Der erste Original207-Lauf mit110 scheiterte am sofortigen Session-Ende, der anschliessende208-Lauf am Start der festen Fixture. Beide unveraenderten Ergebnisse bleiben im lokalen Migrationsarchiv. Ein lokaler Entwurf mit eigenem Dienstnamen wurde nach Pruefung des festen Fixtureendpunkts korrigiert und nie im Gast ausgefuehrt.
+
+Perzentile ab 0.1.118 / R4OS 0.91.30
+-----------------------------------
+PERFORMANCE verwendet r4os.perfdiag.ndjson Version8. p95/p99 sind null
+beziehungsweise n/a, wenn die Stichprobe den Rang nicht aufloest oder der
+Wert nur das Maximum wiederholt. p95 benoetigt mindestens20 Werte, p99
+mindestens100; Wiederholungen bleiben3..20. Maximum, Median und Mittelwert
+bleiben sichtbar. STANDARD suite3, seine fuenf Messwerte und Referenz aendern
+sich nicht. BenchmarkHistory prueft alte Schema7-Quellen und Schema1-Zeilen
+mit deren originalem numerischem Vertrag; neue Metrikzeilen sind Schema2
+mit nullable Perzentilen. Fehlende Felder oder gemischte Quellschemata
+werden weiterhin abgewiesen. Historische Messungen werden nicht umetikettiert.
+
+Die Modulversion im PERFORMANCE-Runrecord stammt ebenfalls aus module.R4MF;
+der fruehere feste interne Wert 0.1.0 wird nicht weiter als aktuelle
+Spectra-Version gemeldet. Historische Berichte bleiben unveraendert.

@@ -404,3 +404,16 @@ prepared explicitly, without creating sockets or sending packets; an absent
 provider stays absent. Every measured heap/PMM/VM/payload/owner equality
 remains strict. The pinned native allocation evidence belongs in the
 migration report, rather than a byte allowance in the test.
+
+Current module version: `0.1.118`.
+
+PERFORMANCE reports use perfdiag schema8. Unresolved p95/p99 ranks are
+`null` in machine output and `n/a` in text: p95 needs at least20 samples,
+p99 at least100, and a value below maximum. Repetitions remain3..20; the
+maximum is always explicit. STANDARD suite3 and its five-sample method stay
+unchanged. BenchmarkHistory verifies historical numeric contracts separately
+and emits nullable schema2 metric rows for new imports.
+
+Die Modulversion im PERFORMANCE-Runrecord stammt ebenfalls aus module.R4MF;
+der fruehere feste interne Wert 0.1.0 wird nicht weiter als aktuelle
+Spectra-Version gemeldet. Historische Berichte bleiben unveraendert.

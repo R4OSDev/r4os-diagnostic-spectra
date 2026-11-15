@@ -8,7 +8,7 @@ var avx_sys: r4os.r4sys.Context = undefined;
 var avx_dev: r4os.r4dev.Context = undefined;
 var avx_evidence: [2]observed.Evidence = .{ .{}, .{} };
 
-const module_version = "0.1.0";
+const module_version = @import("spectra_version").value;
 
 const backing_store_path = "C:\\TEMP\\R4PAGE.BIN";
 const missing_backing_store_path = "C:\\TEMP\\R4MISS.SWP";
@@ -1248,10 +1248,8 @@ const App = struct {
             self.sys.printU64(distribution.minimum);
             self.sys.write(",\"p50\":");
             self.sys.printU64(distribution.p50);
-            self.sys.write(",\"p95\":");
-            self.sys.printU64(distribution.p95);
-            self.sys.write(",\"p99\":");
-            self.sys.printU64(distribution.p99);
+            self.printJsonOptionalU64Field("p95", distribution.p95);
+            self.printJsonOptionalU64Field("p99", distribution.p99);
             self.sys.write(",\"max\":");
             self.sys.printU64(distribution.maximum);
             self.sys.write(",\"mean\":");
@@ -1267,10 +1265,8 @@ const App = struct {
             self.sys.printU64(distribution.minimum);
             self.sys.write(",\"p50\":");
             self.sys.printU64(distribution.p50);
-            self.sys.write(",\"p95\":");
-            self.sys.printU64(distribution.p95);
-            self.sys.write(",\"p99\":");
-            self.sys.printU64(distribution.p99);
+            self.printJsonOptionalU64Field("p95", distribution.p95);
+            self.printJsonOptionalU64Field("p99", distribution.p99);
             self.sys.write(",\"max\":");
             self.sys.printU64(distribution.maximum);
             self.sys.write(",\"mean\":");
@@ -1302,10 +1298,8 @@ const App = struct {
             self.sys.printU64(distribution.minimum);
             self.sys.write(",\"p50\":");
             self.sys.printU64(distribution.p50);
-            self.sys.write(",\"p95\":");
-            self.sys.printU64(distribution.p95);
-            self.sys.write(",\"p99\":");
-            self.sys.printU64(distribution.p99);
+            self.printJsonOptionalU64Field("p95", distribution.p95);
+            self.printJsonOptionalU64Field("p99", distribution.p99);
             self.sys.write(",\"max\":");
             self.sys.printU64(distribution.maximum);
             self.sys.write(",\"mean\":");
@@ -1408,8 +1402,8 @@ const App = struct {
         self.printJsonU64Field("count", distribution.count);
         self.printJsonU64Field("min", distribution.minimum);
         self.printJsonU64Field("p50", distribution.p50);
-        self.printJsonU64Field("p95", distribution.p95);
-        self.printJsonU64Field("p99", distribution.p99);
+        self.printJsonOptionalU64Field("p95", distribution.p95);
+        self.printJsonOptionalU64Field("p99", distribution.p99);
         self.printJsonU64Field("max", distribution.maximum);
         self.printJsonU64Field("mean", distribution.mean);
         self.sys.println("}");
@@ -1540,8 +1534,8 @@ const App = struct {
         self.printJsonU64Field("count", distribution.count);
         self.printJsonU64Field("min", distribution.minimum);
         self.printJsonU64Field("p50", distribution.p50);
-        self.printJsonU64Field("p95", distribution.p95);
-        self.printJsonU64Field("p99", distribution.p99);
+        self.printJsonOptionalU64Field("p95", distribution.p95);
+        self.printJsonOptionalU64Field("p99", distribution.p99);
         self.printJsonU64Field("max", distribution.maximum);
         self.printJsonU64Field("mean", distribution.mean);
         self.sys.println("}");
@@ -1618,8 +1612,8 @@ const App = struct {
         self.printJsonU64Field("count", distribution.count);
         self.printJsonU64Field("min", distribution.minimum);
         self.printJsonU64Field("p50", distribution.p50);
-        self.printJsonU64Field("p95", distribution.p95);
-        self.printJsonU64Field("p99", distribution.p99);
+        self.printJsonOptionalU64Field("p95", distribution.p95);
+        self.printJsonOptionalU64Field("p99", distribution.p99);
         self.printJsonU64Field("max", distribution.maximum);
         self.printJsonU64Field("mean", distribution.mean);
         self.sys.println("}");
@@ -1710,11 +1704,22 @@ const App = struct {
         self.printJsonU64Field("count", distribution.count);
         self.printJsonU64Field("min", distribution.minimum);
         self.printJsonU64Field("p50", distribution.p50);
-        self.printJsonU64Field("p95", distribution.p95);
-        self.printJsonU64Field("p99", distribution.p99);
+        self.printJsonOptionalU64Field("p95", distribution.p95);
+        self.printJsonOptionalU64Field("p99", distribution.p99);
         self.printJsonU64Field("max", distribution.maximum);
         self.printJsonU64Field("mean", distribution.mean);
         self.sys.println("}");
+    }
+
+    fn printOptionalU64(self: *App, value: ?u64, missing: []const u8) void {
+        if (value) |number| self.sys.printU64(number) else self.sys.write(missing);
+    }
+
+    fn printJsonOptionalU64Field(self: *App, name: []const u8, value: ?u64) void {
+        self.sys.putc(',');
+        self.printJsonString(name);
+        self.sys.putc(':');
+        self.printOptionalU64(value, "null");
     }
 
     fn printJsonU64Field(self: *App, name: []const u8, value: u64) void {
@@ -3127,9 +3132,9 @@ const App = struct {
         self.sys.write(" p50=");
         self.sys.printU64(distribution.p50);
         self.sys.write(" p95=");
-        self.sys.printU64(distribution.p95);
+        self.printOptionalU64(distribution.p95, "n/a");
         self.sys.write(" p99=");
-        self.sys.printU64(distribution.p99);
+        self.printOptionalU64(distribution.p99, "n/a");
         self.sys.write(" max=");
         self.sys.printU64(distribution.maximum);
         self.sys.write(" mean=");
@@ -3211,9 +3216,9 @@ const App = struct {
         self.sys.write(" p50=");
         self.sys.printU64(distribution.p50);
         self.sys.write(" p95=");
-        self.sys.printU64(distribution.p95);
+        self.printOptionalU64(distribution.p95, "n/a");
         self.sys.write(" p99=");
-        self.sys.printU64(distribution.p99);
+        self.printOptionalU64(distribution.p99, "n/a");
         self.sys.write(" max=");
         self.sys.printU64(distribution.maximum);
         self.sys.write(" mean=");
@@ -3404,9 +3409,9 @@ const App = struct {
             self.sys.write(" p50=");
             self.sys.printU64(distribution.p50);
             self.sys.write(" p95=");
-            self.sys.printU64(distribution.p95);
+            self.printOptionalU64(distribution.p95, "n/a");
             self.sys.write(" p99=");
-            self.sys.printU64(distribution.p99);
+            self.printOptionalU64(distribution.p99, "n/a");
             self.sys.write(" max=");
             self.sys.printU64(distribution.maximum);
             self.sys.write(" mean=");
@@ -3788,9 +3793,9 @@ const App = struct {
         self.sys.write(" p50=");
         self.sys.printU64(distribution.p50);
         self.sys.write(" p95=");
-        self.sys.printU64(distribution.p95);
+        self.printOptionalU64(distribution.p95, "n/a");
         self.sys.write(" p99=");
-        self.sys.printU64(distribution.p99);
+        self.printOptionalU64(distribution.p99, "n/a");
         self.sys.write(" max=");
         self.sys.printU64(distribution.maximum);
         self.sys.write(" mean=");
@@ -4109,9 +4114,9 @@ const App = struct {
         self.sys.write(" p50=");
         self.sys.printU64(distribution.p50);
         self.sys.write(" p95=");
-        self.sys.printU64(distribution.p95);
+        self.printOptionalU64(distribution.p95, "n/a");
         self.sys.write(" p99=");
-        self.sys.printU64(distribution.p99);
+        self.printOptionalU64(distribution.p99, "n/a");
         self.sys.write(" max=");
         self.sys.printU64(distribution.maximum);
         self.sys.write(" mean=");
@@ -4298,9 +4303,9 @@ const App = struct {
         self.sys.write(" p50=");
         self.sys.printU64(distribution.p50);
         self.sys.write(" p95=");
-        self.sys.printU64(distribution.p95);
+        self.printOptionalU64(distribution.p95, "n/a");
         self.sys.write(" p99=");
-        self.sys.printU64(distribution.p99);
+        self.printOptionalU64(distribution.p99, "n/a");
         self.sys.write(" max=");
         self.sys.printU64(distribution.maximum);
         self.sys.write(" mean=");
@@ -4622,9 +4627,9 @@ const App = struct {
         self.sys.write(" p50=");
         self.sys.printU64(distribution.p50);
         self.sys.write(" p95=");
-        self.sys.printU64(distribution.p95);
+        self.printOptionalU64(distribution.p95, "n/a");
         self.sys.write(" p99=");
-        self.sys.printU64(distribution.p99);
+        self.printOptionalU64(distribution.p99, "n/a");
         self.sys.write(" max=");
         self.sys.printU64(distribution.maximum);
         self.sys.write(" mean=");
@@ -4723,7 +4728,6 @@ const App = struct {
         }
         return ok;
     }
-
 
     fn audioDurationsUnavailable(summary: r4os.abi.ProgramPerformanceSummary) bool {
         const values = [_]u64{

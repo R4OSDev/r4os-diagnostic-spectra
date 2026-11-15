@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const result_schema = "r4os.perfdiag.ndjson";
-pub const result_schema_version: u32 = 7;
+pub const result_schema_version: u32 = 8;
 pub const default_repetitions: u8 = 5;
 pub const min_repetitions: u8 = 3;
 pub const max_repetitions: u8 = 20;
@@ -135,8 +135,8 @@ pub const Distribution = struct {
     count: u8 = 0,
     minimum: u64 = 0,
     p50: u64 = 0,
-    p95: u64 = 0,
-    p99: u64 = 0,
+    p95: ?u64 = null,
+    p99: ?u64 = null,
     maximum: u64 = 0,
     mean: u64 = 0,
 };
@@ -245,11 +245,19 @@ pub fn summarize(values: []const u64) Distribution {
         .count = @intCast(values.len),
         .minimum = sorted[0],
         .p50 = nearestRank(sorted[0..values.len], 50),
-        .p95 = nearestRank(sorted[0..values.len], 95),
-        .p99 = nearestRank(sorted[0..values.len], 99),
+        .p95 = tailQuantile(sorted[0..values.len], 95, 20),
+        .p99 = tailQuantile(sorted[0..values.len], 99, 100),
         .maximum = sorted[values.len - 1],
         .mean = @intCast(sum / values.len),
     };
+}
+
+// Small samples do not resolve an independent tail rank. Equal-valued
+// tails also remain represented by maximum, instead of repeating that field.
+fn tailQuantile(sorted: []const u64, percent: u8, minimum_count: usize) ?u64 {
+    if (sorted.len < minimum_count) return null;
+    const value = nearestRank(sorted, percent);
+    return if (value < sorted[sorted.len - 1]) value else null;
 }
 
 fn selectMode(config: *Config, next: Mode) void {
@@ -433,8 +441,27 @@ test "distribution preserves small differences and tail values" {
     try std.testing.expectEqual(@as(u8, 5), result.count);
     try std.testing.expectEqual(@as(u64, 998), result.minimum);
     try std.testing.expectEqual(@as(u64, 1000), result.p50);
-    try std.testing.expectEqual(@as(u64, 1002), result.p95);
-    try std.testing.expectEqual(@as(u64, 1002), result.p99);
+    try std.testing.expectEqual(@as(?u64, null), result.p95);
+    try std.testing.expectEqual(@as(?u64, null), result.p99);
     try std.testing.expectEqual(@as(u64, 1002), result.maximum);
     try std.testing.expectEqual(@as(u64, 1000), result.mean);
+}
+
+test "tail quantiles expose only resolved ranks below maximum" {
+    const empty = summarize(&.{});
+    try std.testing.expectEqual(@as(?u64, null), empty.p95);
+    try std.testing.expectEqual(@as(?u64, null), empty.p99);
+    var values: [20]u64 = undefined;
+    for (&values, 1..) |*value, number| value.* = number;
+    const twenty = summarize(&values);
+    try std.testing.expectEqual(@as(?u64, 19), twenty.p95);
+    try std.testing.expectEqual(@as(?u64, null), twenty.p99);
+    try std.testing.expectEqual(@as(u64, 20), twenty.maximum);
+    const nineteen = summarize(values[0..19]);
+    try std.testing.expectEqual(@as(?u64, null), nineteen.p95);
+    @memset(&values, 20);
+    const tied = summarize(&values);
+    try std.testing.expectEqual(@as(?u64, null), tied.p95);
+    try std.testing.expectEqual(@as(?u64, null), tied.p99);
+    try std.testing.expectEqual(@as(u64, 20), tied.maximum);
 }
