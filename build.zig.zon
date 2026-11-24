@@ -1,6 +1,6 @@
 .{
     .name = .r4os_spectra,
-    .version = "0.1.0",
+    .version = "0.1.120",
     .fingerprint = 0x94744d8c9dc484da,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
@@ -21,6 +21,7 @@
         "THIRD_PARTY_NOTICES.md",
         "build.zig",
         "build.zig.zon",
+        "Assets",
         "src",
         "Fixtures",
         "Provenance",
