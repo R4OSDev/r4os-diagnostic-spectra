@@ -4,16 +4,17 @@ const std = @import("std");
 const r = @import("r4os");
 const a = r.abi;
 const Output = @import("output.zig").Output;
-var snapshot: a.WindowServiceSnapshot = .{};
 
 fn windowCount(sys: *const r.r4sys.Context) !u32 {
     var service: a.ServiceInfo = .{};
     if (sys.serviceOpen(a.window_service_name, &service) != 0) return error.WindowServiceUnavailable;
+    var status: a.WindowServiceStatus = .{};
     var header: a.ServiceMessageHeader = .{};
-    const got = sys.serviceCall(service.handle, a.window_service_op_snapshot, "", &header, std.mem.asBytes(&snapshot), sys.ticksFromMilliseconds(1000));
+    const got = sys.serviceCall(service.handle, a.window_service_op_status, "", &header, std.mem.asBytes(&status), sys.ticksFromMilliseconds(1000));
     if (sys.serviceClose(service.handle) != 0) return error.ConnectionCloseUnacknowledged;
-    if (got != @sizeOf(a.WindowServiceSnapshot) or header.status != 0) return error.WindowSnapshot;
-    return snapshot.status.window_count;
+    if (got != @sizeOf(a.WindowServiceStatus) or header.status != 0 or status.magic != a.window_service_status_magic or
+        status.version != a.window_service_status_version) return error.WindowStatus;
+    return status.window_count;
 }
 
 pub fn run(app: *r.App2, out: *Output) i32 {
